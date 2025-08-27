@@ -2714,6 +2714,9 @@ void mt_battery_GetBatteryData(void)
 	BMT_status.CURRENT_NOW = BMT_status.IBattery;
 	current_sign = battery_meter_get_battery_current_sign();
 	BMT_status.IBattery *= (current_sign ? 1 : (-1));
+#if defined(CONFIG_FIH_PROJECT_FRT) || defined(CONFIG_FIH_PROJECT_NE1)
+	BMT_status.CURRENT_NOW = BMT_status.IBattery;
+#endif
 
 #if defined(CONFIG_FIH_PROJECT_NE1)
 	//
