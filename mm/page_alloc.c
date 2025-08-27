@@ -118,6 +118,7 @@ static DEFINE_SPINLOCK(managed_page_count_lock);
 
 unsigned long totalram_pages __read_mostly;
 unsigned long totalreserve_pages __read_mostly;
+unsigned long totalcma_pages __read_mostly;
 /*
  * When calculating the number of globally allowed dirty pages, there
  * is a certain number of per-zone reserves that should not be
@@ -1137,13 +1138,13 @@ int move_freepages(struct zone *zone,
 #endif
 
 	for (page = start_page; page <= end_page;) {
-		/* Make sure we are not inadvertently changing nodes */
-		VM_BUG_ON_PAGE(page_to_nid(page) != zone_to_nid(zone), page);
-
 		if (!pfn_valid_within(page_to_pfn(page))) {
 			page++;
 			continue;
 		}
+
+		/* Make sure we are not inadvertently changing nodes */
+		VM_BUG_ON_PAGE(page_to_nid(page) != zone_to_nid(zone), page);
 
 		if (!PageBuddy(page)) {
 			page++;
@@ -5730,8 +5731,8 @@ unsigned long free_reserved_area(void *start, void *end, int poison, char *s)
 	}
 
 	if (pages && s)
-		pr_info("Freeing %s memory: %ldK (%p - %p)\n",
-			s, pages << (PAGE_SHIFT - 10), start, end);
+		pr_info("Freeing %s memory: %ldK\n",
+			s, pages << (PAGE_SHIFT - 10));
 
 	return pages;
 }
@@ -5785,7 +5786,7 @@ void __init mem_init_print_info(const char *str)
 
 	printk("Memory: %luK/%luK available "
 	       "(%luK kernel code, %luK rwdata, %luK rodata, "
-	       "%luK init, %luK bss, %luK reserved"
+	       "%luK init, %luK bss, %luK reserved, %luK cma-reserved"
 #ifdef	CONFIG_HIGHMEM
 	       ", %luK highmem"
 #endif
@@ -5793,7 +5794,8 @@ void __init mem_init_print_info(const char *str)
 	       nr_free_pages() << (PAGE_SHIFT-10), physpages << (PAGE_SHIFT-10),
 	       codesize >> 10, datasize >> 10, rosize >> 10,
 	       (init_data_size + init_code_size) >> 10, bss_size >> 10,
-	       (physpages - totalram_pages) << (PAGE_SHIFT-10),
+	       (physpages - totalram_pages - totalcma_pages) << (PAGE_SHIFT-10),
+	       totalcma_pages << (PAGE_SHIFT-10),
 #ifdef	CONFIG_HIGHMEM
 	       totalhigh_pages << (PAGE_SHIFT-10),
 #endif
@@ -6716,7 +6718,7 @@ int alloc_contig_range(unsigned long start, unsigned long end,
 
 	/* Make sure the range is really isolated. */
 	if (test_pages_isolated(outer_start, end, false)) {
-		pr_info("%s: [%lx, %lx) PFNs busy\n",
+		pr_info_ratelimited("%s: [%lx, %lx) PFNs busy\n",
 			__func__, outer_start, end);
 		ret = -EBUSY;
 		goto done;
@@ -6866,31 +6868,11 @@ bool is_free_buddy_page(struct page *page)
 }
 #endif
 
-static void __free_reserved_pages(struct page *page,
-					unsigned long pfn, unsigned int order) {
-	unsigned int nr_pages = 1 << order;
-	struct page *p = page;
-	unsigned int loop;
-
-	prefetchw(p);
-	for (loop = 0; loop < (nr_pages - 1); loop++, p++) {
-		prefetchw(p + 1);
-		__ClearPageReserved(p);
-		set_page_count(p, 0);
-	}
-	__ClearPageReserved(p);
-	set_page_count(p, 0);
-
-	page_zone(page)->managed_pages += nr_pages;
-	set_page_refcounted(page);
-	__free_pages(page, order);
-}
-
 int free_reserved_memory(phys_addr_t start_phys,
 				phys_addr_t end_phys) {
 
-	int order;
-	unsigned long  start_pfn, end_pfn;
+	phys_addr_t pos;
+	unsigned long pages = 0;
 
 	if (end_phys <= start_phys) {
 
@@ -6906,19 +6888,14 @@ int free_reserved_memory(phys_addr_t start_phys,
 		return -1;
 	}
 
-	start_pfn = __phys_to_pfn(start_phys);
-	end_pfn = __phys_to_pfn(end_phys);
+	memblock_free(start_phys, (end_phys - start_phys));
 
-	while (start_pfn < end_pfn) {
+	for (pos = start_phys; pos < end_phys; pos += PAGE_SIZE, pages++)
+		free_reserved_page(phys_to_page(pos));
 
-		order = min(MAX_ORDER - 1UL, __ffs(start_pfn));
-		while (start_pfn + (1UL << order) > end_pfn)
-			order--;
-		__free_reserved_pages(pfn_to_page(start_pfn), start_pfn, order);
-		adjust_managed_page_count(pfn_to_page(start_pfn), 1<<order);
-		start_pfn += (1UL << order);
-	}
-
+	if (pages)
+		pr_info("Freeing modem memory: %ldK from phys %llx\n",
+			pages << (PAGE_SHIFT - 10), (unsigned long long)start_phys);
 	mtk_memcfg_record_freed_reserved(start_phys, end_phys);
 
 	return 0;

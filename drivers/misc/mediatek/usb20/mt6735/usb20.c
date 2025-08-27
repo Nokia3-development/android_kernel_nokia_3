@@ -760,12 +760,7 @@ void musb_sync_with_bat(struct musb *musb, int usb_state)
 	DBG(0, "BATTERY_SetUSBState, state=%d\n", usb_state);
 #ifdef CONFIG_MTK_SMART_BATTERY
 	BATTERY_SetUSBState(usb_state);
-
-// sometimes value of SOC is 50%.
-	//wake_up_bat();
-	wake_up_bat3();
-//end.50%
-
+	wake_up_bat();
 #endif
 #endif
 }
@@ -1671,4 +1666,4 @@ static struct kernel_param_ops option_param_ops = {
 	.set = set_option,
 	.get = param_get_int,
 };
-module_param_cb(option, &option_param_ops, &option, 0644);
+module_param_cb(option, &option_param_ops, &option, 0400);

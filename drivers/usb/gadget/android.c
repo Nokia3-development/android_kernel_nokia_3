@@ -54,6 +54,7 @@
 
 USB_ETHERNET_MODULE_PARAMETERS();
 
+
 #ifdef CONFIG_MTK_MD3_SUPPORT
 #if CONFIG_MTK_MD3_SUPPORT /* Using this to check >0 */
 #include "viatel_rawbulk.h"
@@ -2132,8 +2133,10 @@ static DEVICE_ATTR(functions, S_IRUGO | S_IWUSR, functions_show,
 						 functions_store);
 static DEVICE_ATTR(enable, S_IRUGO | S_IWUSR, enable_show, enable_store);
 static DEVICE_ATTR(state, S_IRUGO, state_show, NULL);
-static DEVICE_ATTR(log, S_IRUGO | S_IWUSR, log_show,
-						 log_store);
+static DEVICE_ATTR(log, S_IRUGO | S_IWUSR, log_show, log_store);
+
+
+
 
 static struct device_attribute *android_usb_attributes[] = {
 	&dev_attr_idVendor,

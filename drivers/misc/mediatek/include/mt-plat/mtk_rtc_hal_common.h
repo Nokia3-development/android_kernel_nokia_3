@@ -33,7 +33,15 @@ typedef enum {
 	RTC_PWRON_LOGO,
 	RTC_32K_LESS,
 	RTC_LP_DET,
+
+	/*Begin, for reboot condition, 20190104*/
+	RTC_SPAR0_FIH_FTM,
+	RTC_SPAR0_FIH_META,
+	RTC_SPAR0_FIH_PRELOADER,
+    RTC_SPAR0_FIH_RAMTEST, /**/
 	RTC_VBAT,
+	/*End, for reboot condition, 20190104*/
+
 	RTC_SPAR_NUM
 } rtc_spare_enum;
 

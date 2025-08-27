@@ -86,7 +86,9 @@
 #include <asm/setup.h>
 #include <asm/sections.h>
 #include <asm/cacheflush.h>
-
+// add for Indonesia TKDN SW Requirements V1.0-13: Build Time Zone
+#include <linux/utsname.h>
+// add for Indonesia TKDN SW Requirements V1.0-13: Build Time Zone
 #ifdef CONFIG_X86_LOCAL_APIC
 #include <asm/smp.h>
 #endif
@@ -378,6 +380,362 @@ static void __init setup_command_line(char *command_line)
 	strcpy(static_command_line, command_line);
 }
 
+
+
+/* Begin, for feature, 20190104 */
+char fih_skuid[8] = {'0'};
+bool fih_efuse_enable = 1;
+unsigned short fih_hwid = 0xFF;
+
+unsigned short fih_gethwid(void)
+{
+	unsigned char proj = 0, phase = 0, module = 0;
+	char *pattern = "fih_hwid=";
+	char *p = strstr(saved_command_line, pattern);
+	unsigned short ret = 0;
+
+	if (p == NULL)
+		return ret;
+
+	p += strlen(pattern);
+	p = p + 2; // skip '0' & 'x'
+
+	module = *p++ - '0';
+	phase  = *p++ - '0';
+
+	if((*p >= '0') && (*p <= '9'))
+		proj = *p - '0';
+	else if((*p >= 'a') && (*p <= 'f'))
+		proj = *p - 'a' + 10;
+	else if((*p >= 'A') && (*p <= 'F'))
+		proj = *p - 'A' + 10;
+
+	ret = proj | (phase << 4) | (module << 8);
+	return ret;
+}
+EXPORT_SYMBOL(fih_gethwid);
+
+/* for runin*/
+unsigned int fih_get_ramtest_result(void)
+{
+    unsigned char result=0;
+    char *pattern = "ramtest_result=";
+    char *p = strstr(saved_command_line, pattern);
+    unsigned short ret=0;
+
+    if (p == NULL)
+		return ret;
+
+    p += strlen(pattern);
+    p = p + 2; // skip '0' & 'x'
+    if((*p >= '0') && (*p <= '9'))
+                result = *p - '0';
+    else if((*p >= 'a') && (*p <= 'f'))
+                result = *p - 'a' + 10;
+    else if((*p >= 'A') && (*p <= 'F'))
+        result = *p - 'A' + 10;
+    ret = result;
+    return ret;
+}
+EXPORT_SYMBOL(fih_get_ramtest_result);
+
+extern unsigned long long fih_mmc_size(void)
+{
+	unsigned char a = 0;
+	int i;
+
+	char *pattern = "emmc_total_size=";
+	char *p = strstr(saved_command_line, pattern);
+
+	unsigned long long  ret = 0;
+
+	if (p == NULL)
+		return ret;
+
+	p += strlen(pattern);
+	p = p + 2;
+
+	for(i = 0; i < 9; i++)
+	{
+		if((*p >= '0') && (*p <= '9'))
+			a = *p - '0';
+		else if((*p >= 'a') && (*p <= 'f'))
+			a = *p - 'a' + 10;
+		else if((*p >= 'A') && (*p <= 'F'))
+			a = *p - 'A' + 10;
+
+		p++;
+		ret = a | ( ret<< 4);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(fih_mmc_size);
+
+extern unsigned long long fih_mmc_usersize(void)
+{
+	unsigned char a = 0;
+	int i;
+
+	char *pattern = "emmc_user_size=";
+	char *p = strstr(saved_command_line, pattern);
+
+	unsigned long long  ret = 0;
+
+	if (p == NULL)
+		return ret;
+
+	p += strlen(pattern);
+	p = p + 2; 
+
+	for(i = 0; i < 9; i++)
+	{
+		if((*p >= '0') && (*p <= '9'))
+			a = *p - '0';
+		else if((*p >= 'a') && (*p <= 'f'))
+			a = *p - 'a' + 10;
+		else if((*p >= 'A') && (*p <= 'F'))
+			a = *p - 'A' + 10;
+
+		p++;
+		ret = a | ( ret<< 4);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(fih_mmc_usersize);
+
+unsigned short fih_get_memory_type(void)
+{
+	unsigned char ddr = 0, none = 0, flash = 0;
+
+	char *pattern = "memory_type=";
+	char *p = strstr(saved_command_line, pattern);
+
+	unsigned short ret = 0;
+
+	if (p == NULL)
+		return ret;
+
+	p += strlen(pattern);
+	p = p + 2; // skip '0' & 'x'
+
+	flash = *p++ - '0';
+	none  = *p++ - '0';
+
+	if((*p >= '0') && (*p <= '9'))
+		ddr = *p - '0';
+	else if((*p >= 'a') && (*p <= 'f'))
+		ddr = *p - 'a' + 10;
+	else if((*p >= 'A') && (*p <= 'F'))
+		ddr = *p - 'A' + 10;
+
+	ret = ddr | (none << 4) | (flash << 8);
+
+	return ret;
+}
+EXPORT_SYMBOL(fih_get_memory_type);
+
+unsigned short fih_get_memory_vendor(void)
+{
+	unsigned char vendor = 0;
+
+	char *pattern = "ddr_vendor=";
+	char *p = strstr(saved_command_line, pattern);
+
+	unsigned short ret = 0;
+
+	if (p == NULL)
+		return ret;
+
+	p += strlen(pattern);
+	p = p + 2; // skip '0' & 'x'
+
+	if((*p >= '0') && (*p <= '9'))
+		vendor = *p - '0';
+	else if((*p >= 'a') && (*p <= 'f'))
+		vendor = *p - 'a' + 10;
+	else if((*p >= 'A') && (*p <= 'F'))
+		vendor = *p - 'A' + 10;
+
+	ret = vendor;
+	return ret;
+}
+EXPORT_SYMBOL(fih_get_memory_vendor);
+
+extern unsigned long long fih_get_emmc_size(void)
+{
+	unsigned char a = 0;
+	int i;
+
+	char *pattern = "emmc_total_size=";
+	char *p = strstr(saved_command_line, pattern);
+
+	unsigned long long  ret = 0;
+
+	if (p == NULL)
+		return ret;
+
+	p += strlen(pattern);
+	p = p + 2;
+
+	for(i = 0; i < 9; i++)
+	{
+		if((*p >= '0') && (*p <= '9'))
+			a = *p - '0';
+		else if((*p >= 'a') && (*p <= 'f'))
+			a = *p - 'a' + 10;
+		else if((*p >= 'A') && (*p <= 'F'))
+			a = *p - 'A' + 10;
+
+		p++;
+		ret = a | ( ret<< 4);
+	}
+	return ret;
+}
+EXPORT_SYMBOL(fih_get_emmc_size);
+
+extern unsigned long long fih_get_emmc_usersize(void)
+{
+	unsigned char a = 0;
+	int i;
+
+	char *pattern = "emmc_user_size=";
+	char *p = strstr(saved_command_line, pattern);
+
+	unsigned long long  ret = 0;
+
+	if (p == NULL)
+		return ret;
+
+	p += strlen(pattern);
+	p = p + 2; 
+
+	for(i = 0; i < 9; i++)
+	{
+		if((*p >= '0') && (*p <= '9'))
+			a = *p - '0';
+		else if((*p >= 'a') && (*p <= 'f'))
+			a = *p - 'a' + 10;
+		else if((*p >= 'A') && (*p <= 'F'))
+			a = *p - 'A' + 10;
+
+		p++;
+		ret = a | ( ret<< 4);
+	}
+
+	return ret;
+}
+EXPORT_SYMBOL(fih_get_emmc_usersize);
+
+unsigned char fih_get_ps_magnum(void)
+{
+	unsigned char ret = 0;
+	char *pattern = "psmanuf=0x";
+	char *p = strstr(saved_command_line, pattern);
+
+	//printk("p = %p, %s\n", p, p);
+
+	if (p == NULL)
+		return ret;
+
+	p += strlen(pattern);
+	sscanf(p, "%x", (unsigned int *)&ret);
+
+	return ret;
+}
+
+unsigned char fih_getcmd(void)
+{
+	unsigned char ret = 0;
+
+	char *pattern = "androidboot.mode=";
+	char *p = strstr(saved_command_line, pattern);
+
+	if (p == NULL)
+		return ret;
+
+	ret = *(p+17);
+
+	return ret;
+}
+
+
+int gsen_cali_x = 0;
+int gsen_cali_y = 0;
+int gsen_cali_z = 0;
+
+
+void fih_get_gensor_cmd(void)
+{
+	char *ptr1 = strstr(saved_command_line, "cali_x=");
+	char *ptr2 = strstr(saved_command_line, "cali_y=");
+	char *ptr3 = strstr(saved_command_line, "cali_z=");
+
+	if(ptr1 == NULL || ptr2 == NULL || ptr3 == NULL)
+		return;
+
+	ptr1 += strlen("cali_x=");
+	sscanf(ptr1, "%d", (int *)&gsen_cali_x);
+
+	ptr2 += strlen("cali_y=");
+	sscanf(ptr2, "%d", (int *)&gsen_cali_y);
+
+	ptr3 += strlen("cali_z=");
+	sscanf(ptr3, "%d", (int *)&gsen_cali_z);
+}
+
+
+bool fih_get_efuse_enable(void)
+{
+	bool ret = 0;
+
+	//strstr(str1, str2)
+	// str1 does not include str2, means securityfused=true
+	if (!strstr(saved_command_line, "androidboot.securityfused=false"))
+	{
+		ret = 1;
+	}
+	else
+	{
+		ret = 0;
+	}
+
+	return ret;
+}
+
+void fih_get_skuid(void)
+{
+	char *pattern = "androidboot.skuid=";
+	char *p = strstr(saved_command_line, pattern);
+
+	if (p == NULL)
+		return;
+
+	p += strlen(pattern);
+
+	strncpy(fih_skuid, p, 5);
+	//printk("fih_get_skuid fih_skuid = %s\n", fih_skuid);
+}
+/* END, for feature, 20190104 */
+
+//FIH, add for Indonesia TKDN SW Requirements V1.0-13: Build Time Zone
+static void fih_info_version(void)
+{
+  char *timezone = NULL;
+
+  printk("%s: SW version(skuid) = %s\n", __func__, fih_skuid);
+  if(strncmp(fih_skuid, "600ID", 5) == 0)
+  {
+    timezone = strstr(init_utsname()->version, "CST");
+    if(timezone != NULL)
+    {
+      memcpy(timezone, "WIB", 3);
+    }
+  }
+}
+//FIH, add for Indonesia TKDN SW Requirements V1.0-13: Build Time Zone
+
 /*
  * We need to finalize in a non-__init function or else race conditions
  * between the root thread and the init thread may cause start_kernel to
@@ -538,6 +896,22 @@ asmlinkage __visible void __init start_kernel(void)
 
 	build_all_zonelists(NULL, NULL);
 	page_alloc_init();
+
+	// 
+	fih_hwid = fih_gethwid();
+	if (fih_hwid == 0xFF)
+		fih_hwid = 0x156;
+
+	fih_efuse_enable = fih_get_efuse_enable();
+
+	fih_get_gensor_cmd();
+	//pr_notice("Alex x = %d, y = %d, z = %d\n", gsen_cali_x, gsen_cali_y, gsen_cali_z);
+
+	fih_get_skuid();
+
+	// add for Indonesia TKDN SW Requirements V1.0-13: Build Time Zone
+	fih_info_version();
+	// add for Indonesia TKDN SW Requirements V1.0-13: Build Time Zone
 
 	pr_notice("Kernel command line: %s\n", boot_command_line);
 	parse_early_param();

@@ -31,6 +31,7 @@
 #include <mt-plat/aee.h>
 #include <mrdump.h>
 #include "aee-common.h"
+#include <mrdump_private.h>
 
 #define RR_PROC_NAME "reboot-reason"
 
@@ -239,7 +240,7 @@ inline void aee_print_bt(struct pt_regs *regs)
 	struct pt_regs *excp_regs;
 
 	bottom = regs->reg_sp;
-	if (!virt_addr_valid(bottom)) {
+	if (!mrdump_virt_addr_valid(bottom)) {
 		aee_nested_printf("invalid sp[%lx]\n", regs);
 		return;
 	}
@@ -257,8 +258,7 @@ inline void aee_print_bt(struct pt_regs *regs)
 		ret = unwind_frame(&cur_frame);
 		if (ret < 0)
 			break;
-		if (!((cur_frame.pc >= (PAGE_OFFSET + THREAD_SIZE))
-		      && virt_addr_valid(cur_frame.pc)))
+		if (!mrdump_virt_addr_valid(cur_frame.pc))
 			break;
 		if (in_exception_text(cur_frame.pc)) {
 #ifdef __aarch64__
@@ -282,7 +282,7 @@ inline int aee_nested_save_stack(struct pt_regs *regs)
 {
 	int len = 0;
 
-	if (!virt_addr_valid(regs->reg_sp))
+	if (!mrdump_virt_addr_valid(regs->reg_sp))
 		return -1;
 	aee_nested_printf("[%lx %lx]\n", regs->reg_sp, regs->reg_sp + 256);
 
@@ -363,7 +363,7 @@ asmlinkage void aee_stop_nested_panic(struct pt_regs *regs)
 		/* must guarantee Only one cpu can run here */
 		/* first check if thread valid */
 	case 1:
-		if (virt_addr_valid(thread) && virt_addr_valid(thread->regs_on_excp)) {
+		if (mrdump_virt_addr_valid(thread) && mrdump_virt_addr_valid(thread->regs_on_excp)) {
 			excp_regs = thread->regs_on_excp;
 		} else {
 			/* if thread invalid, which means wrong sp or thread_info corrupted,
@@ -394,7 +394,7 @@ asmlinkage void aee_stop_nested_panic(struct pt_regs *regs)
 
 			/*Dump second panic stack */
 			aee_nested_printf("Current\n");
-			if (virt_addr_valid(regs)) {
+			if (mrdump_virt_addr_valid(regs)) {
 				len = aee_nested_save_stack(regs);
 				aee_nested_printf("\nbacktrace:");
 				aee_print_bt(regs);
@@ -404,17 +404,23 @@ asmlinkage void aee_stop_nested_panic(struct pt_regs *regs)
 		ipanic_recursive_ke(regs, excp_regs, cpu);
 
 		aee_rec_step_nested_panic(step_base + 6);
-		/* we donot want a FIQ after this, so disable hwt */
-		res = get_wd_api(&wd_api);
-		if (res)
-			aee_nested_printf("get_wd_api error\n");
-		else
-			wd_api->wd_aee_confirm_hwreboot();
-		aee_rec_step_nested_panic(step_base + 7);
 		break;
 	default:
 		break;
 	}
+
+	/* we donot want a FIQ after this, so disable hwt */
+#ifdef CONFIG_MTK_WATCHDOG
+	res = get_wd_api(&wd_api);
+
+	if (res)
+		aee_nested_printf("get_wd_api error\n");
+	else
+		wd_api->wd_aee_confirm_hwreboot();
+#else
+	aee_nested_printf("mtk watchdog not enable.\n");
+#endif
+	aee_rec_step_nested_panic(step_base + 7);
 
 	/* waiting for the WDT timeout */
 	while (1) {

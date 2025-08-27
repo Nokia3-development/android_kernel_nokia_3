@@ -196,6 +196,13 @@ static struct ion_buffer *ion_buffer_create(struct ion_heap *heap,
 	   memory coming from the heaps is ready for dma, ie if it has a
 	   cached mapping that mapping has been invalidated */
 	for_each_sg(buffer->sg_table->sgl, sg, buffer->sg_table->nents, i) {
+		if ((heap->id == ION_HEAP_TYPE_MULTIMEDIA_MAP_MVA) && (align < PAGE_OFFSET)) {
+			if (align < VMALLOC_START || align > VMALLOC_END) {
+				/*userspace va without vmalloc, has no page struct*/
+				sg->length = sg_dma_len(sg);
+				continue;
+			}
+		}
 		sg_dma_address(sg) = sg_phys(sg);
 		#ifdef CONFIG_NEED_SG_DMA_LENGTH
 		sg->dma_length = sg->length;
@@ -505,7 +512,8 @@ struct ion_handle *__ion_alloc(struct ion_client *client, size_t len,
 	 * request of the caller allocate from it.  Repeat until allocate has
 	 * succeeded or all heaps have been tried
 	 */
-	len = PAGE_ALIGN(len);
+	if (heap_id_mask != ION_HEAP_MAP_MVA_MASK)
+		len = PAGE_ALIGN(len);
 
 	if (!len) {
 		IONMSG("%s len cannot be zero.\n", __func__);
@@ -1610,7 +1618,8 @@ static size_t ion_debug_heap_total(struct ion_client *client,
 						     node);
 		if ((handle->buffer->heap->id == id)
 			|| ((id == ION_HEAP_TYPE_MULTIMEDIA)
-				&& (handle->buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_FOR_CAMERA)))
+			&& ((handle->buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_FOR_CAMERA) ||
+				(handle->buffer->heap->id == ION_HEAP_TYPE_MULTIMEDIA_MAP_MVA))))
 			size += handle->buffer->size;
 	}
 	mutex_unlock(&client->lock);

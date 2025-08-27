@@ -410,8 +410,7 @@ struct mmc_host {
 
 	unsigned long		state;
 	wait_queue_head_t	cmp_que;
-	wait_queue_head_t	cmdq_que;
-	struct mmc_request	*volatile done_mrq;
+	struct mmc_request	*done_mrq;
 	struct mmc_command	chk_cmd;
 	struct mmc_request	chk_mrq;
 	struct mmc_command	que_cmd;
@@ -463,7 +462,8 @@ struct mmc_host {
 
 #ifdef CONFIG_BLOCK
 	int			latency_hist_enabled;
-	struct io_latency_state io_lat_s;
+	struct io_latency_state io_lat_read;
+	struct io_latency_state io_lat_write;
 #endif
 
 	unsigned long		private[0] ____cacheline_aligned;

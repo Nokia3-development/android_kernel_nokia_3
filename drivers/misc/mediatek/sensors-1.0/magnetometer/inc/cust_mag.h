@@ -33,6 +33,7 @@ struct mag_hw {
 
 int get_mag_dts_func(struct device_node *node, struct mag_hw *hw);
 
-struct mag_hw *f_get_mag_dts_func(const char *name, struct mag_hw *hw);
+// 
+struct mag_hw *fih_get_mag_dts_func(const char *name, struct mag_hw *hw);
 
 #endif

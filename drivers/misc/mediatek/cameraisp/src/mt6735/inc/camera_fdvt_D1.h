@@ -17,6 +17,8 @@
 #include <linux/ioctl.h>
 #define FDVT_IOC_MAGIC    'N'
 
+#define SIG_ERESTARTSYS 512
+
 #ifdef CONFIG_COMPAT
 /* 64 bit */
 #include <linux/fs.h>
@@ -52,12 +54,6 @@ typedef struct {
 
 #define MT6573FDVTIOC_T_DUMPREG           _IO(FDVT_IOC_MAGIC, 0x80)
 
-/*
-#define FDVT_SET_CMD_CMD            _IOW(FDVT_IOC_MAGIC, 0x03, unsigned int)
-#define FDVT_SET_PWR_CMD            _IOW(FDVT_IOC_MAGIC, 0x04, unsigned int)
-#define FDVT_SET_ISR_CMD            _IOW(FDVT_IOC_MAGIC, 0x05, unsigned int)
-#define FDVT_GET_CACHECTRLADDR_CMD  _IOR(FDVT_IOC_MAGIC, 0x06, int)
-*/
 
 #ifdef CONFIG_COMPAT
 

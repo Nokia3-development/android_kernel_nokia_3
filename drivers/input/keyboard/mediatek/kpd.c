@@ -21,6 +21,7 @@
 #include <linux/of_irq.h>
 #include <linux/clk.h>
 
+// OEM
 #include <linux/gpio.h>
 #include <mach/gpio_const.h>
 #include <mt-plat/mt_gpio.h>
@@ -50,6 +51,7 @@ static struct wake_lock pwrkey_lock;
 /* for slide QWERTY */
 #if KPD_HAS_SLIDE_QWERTY
 
+// OEM
 #define HALL_SLIDE        (1)
 #define HALL_CLOSE       (0)
 
@@ -63,6 +65,7 @@ struct work_struct hall_irq_work;
 static struct workqueue_struct *hall_irq_workqueue;
 
 static irqreturn_t hall_eint_handler(int irq, void *data);
+
 #endif
 
 struct keypad_dts_data kpd_dts_data;
@@ -163,6 +166,7 @@ static ssize_t kpd_show_call_state(struct device_driver *ddri, char *buf)
 	return res;
 }
 
+// OEM
 #if KPD_HAS_SLIDE_QWERTY
 static ssize_t kpd_show_hall_state(struct device_driver *ddri, char *buf)
 {
@@ -182,6 +186,7 @@ static DRIVER_ATTR(kpd_call_state, S_IWUSR | S_IRUGO, kpd_show_call_state, kpd_s
 
 static struct driver_attribute *kpd_attr_list[] = {
 	&driver_attr_kpd_call_state,
+	/* OEM */
 #if KPD_HAS_SLIDE_QWERTY
 	&driver_attr_kpd_hall_state,
 #endif	
@@ -346,7 +351,7 @@ static enum hrtimer_restart aee_timer_5s_func(struct hrtimer *timer)
 #endif
 
 /************************************************************************/
-//for HALL Sensor
+// OEM, for HALL Sensor
 /************************************************************************/
 
 #if KPD_HAS_SLIDE_QWERTY
@@ -457,6 +462,7 @@ static void hall_eint_work_callback(struct work_struct *work)
 	enable_irq(hall_slide_irq);
 }
 #endif
+
 
 #ifdef CONFIG_KPD_PWRKEY_USE_EINT
 static void kpd_pwrkey_handler(unsigned long data)
@@ -881,7 +887,7 @@ static int kpd_open(struct input_dev *dev)
 	return 0;
 }
 
-// Begin, for reboot node, 20171124
+// Begin, OEM, for reboot node, 20171124
 #if 1
 static ssize_t kpd_reboot_show(struct device_driver *ddri, char *buf)
 {
@@ -927,16 +933,16 @@ static ssize_t kpd_reboot_store(struct device_driver *ddri, const char *buf, siz
 	switch (reboot_time)
     {
         case 5:
-            pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,3);
+            pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,3);//mt6328_upmu_set_rg_pwrkey_rst_td(3);
             break;
         case 8:
-            pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,0);
+            pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,0);//mt6328_upmu_set_rg_pwrkey_rst_td(0);
             break;
         case 11:
-            pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,1);
+            pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,1);//mt6328_upmu_set_rg_pwrkey_rst_td(1);
             break;
         case 14:
-            pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,2);
+            pmic_set_register_value(PMIC_RG_PWRKEY_RST_TD,2);//mt6328_upmu_set_rg_pwrkey_rst_td(2);
             break;
 		default:
             break;
@@ -945,7 +951,7 @@ static ssize_t kpd_reboot_store(struct device_driver *ddri, const char *buf, siz
 }
 static DRIVER_ATTR(reboot, 0755, kpd_reboot_show, kpd_reboot_store);
 #endif
-// End, for reboot node, 20171124
+// End, OEM, for reboot node, 20171124
 
 
 void kpd_get_dts_info(struct device_node *node)
@@ -1111,11 +1117,11 @@ static int kpd_pdrv_probe(struct platform_device *pdev)
 #ifndef KPD_EARLY_PORTING	/*add for avoid early porting build err the macro is defined in custom file */
 	long_press_reboot_function_setting();	/* /API 4 for kpd long press reboot function setting */
 
-	// Begin, for reboot node, 20171124
+	// Begin, OEM, for reboot node, 20171124
     err = driver_create_file(&kpd_pdrv.driver, &driver_attr_reboot);
 	if(err)
         printk("create reboot node failed\n");
-	// End, for reboot node, 20171124
+	// End, OEM, for reboot node, 20171124
 
 #endif
 	hrtimer_init(&aee_timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);

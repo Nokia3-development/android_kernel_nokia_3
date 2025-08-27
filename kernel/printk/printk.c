@@ -102,8 +102,11 @@ static int log_count;
 
 static int parse_log_file(void);
 
-inline void set_detect_count(int count)
+#endif
+
+void set_detect_count(int count)
 {
+#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
 	if (count >= detect_count)
 		detect_count = count;
 	else {
@@ -114,23 +117,38 @@ inline void set_detect_count(int count)
 		detect_count_change = true;
 	}
 	pr_info("Printk too much criteria: %d  delay_flag: %d\n", detect_count, detect_count_change);
-}
-
-inline int get_detect_count(void)
-{
-	return detect_count;
-}
-
-inline void set_logtoomuch_enable(int value)
-{
-	printk_too_much_enable = value;
-}
-
-inline int get_logtoomuch_enable(void)
-{
-	return printk_too_much_enable;
-}
 #endif
+}
+EXPORT_SYMBOL(set_detect_count);
+
+int get_detect_count(void)
+{
+#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
+	return detect_count;
+#else
+	return 0;
+#endif
+}
+EXPORT_SYMBOL(get_detect_count);
+
+void set_logtoomuch_enable(int value)
+{
+#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
+	printk_too_much_enable = value;
+#endif
+}
+EXPORT_SYMBOL(set_logtoomuch_enable);
+
+int get_logtoomuch_enable(void)
+{
+#if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
+	return printk_too_much_enable;
+#else
+	return 0;
+#endif
+}
+EXPORT_SYMBOL(get_logtoomuch_enable);
+
 #ifdef CONFIG_EARLY_PRINTK_DIRECT
 extern void printascii(char *);
 #endif
@@ -407,6 +425,19 @@ u32 log_buf_len_get(void)
 	return log_buf_len;
 }
 
+//BBS begin
+#define __LOG_BBS_BUF_LEN 1024
+DECLARE_WAIT_QUEUE_HEAD(bbs_log_wait);
+static DEFINE_RAW_SPINLOCK(bbs_logbuf_lock);
+static unsigned log_bbs_start = 0;	/* Index into log_bbs_start: next char to be read by syslog() */
+static unsigned log_bbs_end=0;	/* Index into log_bbs_end: most-recently-written-char + 1 */
+static char __log_bbs_buf[__LOG_BBS_BUF_LEN];
+static char *log_bbs_buf = __log_bbs_buf;
+static int log_bbs_buf_len = __LOG_BBS_BUF_LEN;
+#define LOG_BBS_BUF_MASK (log_bbs_buf_len-1)
+#define LOG_BBS_BUF(idx) (log_bbs_buf[(idx) & LOG_BBS_BUF_MASK])
+//BBS end
+
 /* human readable text of the record */
 static char *log_text(const struct printk_log *msg)
 {
@@ -654,6 +685,10 @@ int dmesg_restrict = IS_ENABLED(CONFIG_SECURITY_DMESG_RESTRICT);
 
 static int syslog_action_restricted(int type)
 {
+//BBS begin
+	if (type == SYSLOG_ACTION_GET_KERNEL_BUFFER)
+		return 0;
+//BBS end
 	if (dmesg_restrict)
 		return 1;
 	/*
@@ -1620,6 +1655,47 @@ int do_syslog(int type, char __user *buf, int len, bool from_file)
 	case SYSLOG_ACTION_SIZE_BUFFER:
 		error = log_buf_len;
 		break;
+/* marx BBS log buffer */
+	case SYSLOG_ACTION_GET_KERNEL_BUFFER:
+		{
+			unsigned i;
+			char c;
+			error = -EINVAL;
+			if (!buf || len < 0)
+				goto out;
+			error = 0;
+			if (!len)
+				goto out;
+			if (!access_ok(VERIFY_WRITE, buf, len)) {
+				error = -EFAULT;
+				goto out;
+			}
+			error = wait_event_interruptible(bbs_log_wait,
+								(log_bbs_start - log_bbs_end));
+			if (error)
+				goto out;
+
+			i = 0;
+
+			raw_spin_lock_irq(&bbs_logbuf_lock);
+
+			while (!error&&(log_bbs_start != log_bbs_end)&&i < len) {
+				c = LOG_BBS_BUF(log_bbs_start);
+				log_bbs_start++;
+				raw_spin_unlock_irq(&bbs_logbuf_lock);
+				error = __put_user(c,buf);
+				buf++;
+				i++;
+				cond_resched();
+				raw_spin_lock_irq(&bbs_logbuf_lock);
+			}
+			raw_spin_unlock_irq(&bbs_logbuf_lock);
+
+			if (!error)
+				error = i;
+			break;
+		}
+/* marx BBS log buffer */
 	default:
 		error = -EINVAL;
 		break;
@@ -1809,6 +1885,7 @@ static inline int can_use_console(unsigned int cpu)
  * is successful, false otherwise.
  */
 static int console_trylock_for_printk(void)
+	__releases(&bbs_logbuf_lock)    //BBS
 {
 	unsigned int cpu = smp_processor_id();
 
@@ -2193,6 +2270,29 @@ asmlinkage __visible int printk(const char *fmt, ...)
 #endif
 	va_start(args, fmt);
 	r = vprintk_emit(0, -1, NULL, 0, fmt, args);
+
+//
+	if(strstr(fmt,"BBox") != NULL){
+		int i;
+		char printk_bbsbuf[512];
+
+		raw_spin_lock_irq(&bbs_logbuf_lock);
+		r = vscnprintf(printk_bbsbuf, sizeof(printk_bbsbuf), fmt, args);
+
+		for (i = 0; i < r; i++)
+		{
+			LOG_BBS_BUF(log_bbs_end) = printk_bbsbuf[i];
+			log_bbs_end++;
+			if (log_bbs_end - log_bbs_start > log_bbs_buf_len)
+				log_bbs_start = log_bbs_end - log_bbs_buf_len;
+		}
+		raw_spin_unlock_irq(&bbs_logbuf_lock);
+
+		if(waitqueue_active(&bbs_log_wait))
+			wake_up_interruptible(&bbs_log_wait);
+	}
+//
+
 	va_end(args);
 
 	return r;
@@ -3061,6 +3161,10 @@ static int __init printk_late_init(void)
 #if defined(CONFIG_MT_ENG_BUILD) && defined(CONFIG_LOG_TOO_MUCH_WARNING)
 	struct proc_dir_entry *entry;
 #endif
+
+	//BBS begin
+	raw_spin_lock_init(&bbs_logbuf_lock);
+	//BBS end
 	for_each_console(con) {
 		if (!keep_bootcon && con->flags & CON_BOOT) {
 			unregister_console(con);

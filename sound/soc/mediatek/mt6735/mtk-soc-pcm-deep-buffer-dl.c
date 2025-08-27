@@ -70,10 +70,10 @@
 #define CLEAR_BUFFER_US         600
 static int CLEAR_BUFFER_SIZE;
 
+static int deep_buffer_dl_hdoutput;
 static AFE_MEM_CONTROL_T *pMemControl;
 static struct snd_dma_buffer *deep_buffer_dl_dma_buf;
 static int mPlaybackSramState;
-static bool mPlaybackUseSram;
 
 
 /*
@@ -85,6 +85,39 @@ static unsigned int irq_cnt;
 static struct device *mDev;
 
 const char * const deep_buffer_dl_HD_output[] = {"Off", "On"};
+
+static const struct soc_enum deep_buffer_dl_Enum[] = {
+	SOC_ENUM_SINGLE_EXT(ARRAY_SIZE(deep_buffer_dl_HD_output),
+			    deep_buffer_dl_HD_output),
+};
+
+static int deep_buffer_dl_hdoutput_get(struct snd_kcontrol *kcontrol,
+				       struct snd_ctl_elem_value *ucontrol)
+{
+	pr_debug("%s() = %d\n", __func__, deep_buffer_dl_hdoutput);
+	ucontrol->value.integer.value[0] = deep_buffer_dl_hdoutput;
+	return 0;
+}
+
+static int deep_buffer_dl_hdoutput_set(struct snd_kcontrol *kcontrol,
+				       struct snd_ctl_elem_value *ucontrol)
+{
+	/* pr_debug("%s()\n", __func__); */
+	if (ucontrol->value.enumerated.item[0] >
+	    ARRAY_SIZE(deep_buffer_dl_HD_output)) {
+		pr_warn("%s(), return -EINVAL\n", __func__);
+		return -EINVAL;
+	}
+
+	deep_buffer_dl_hdoutput = ucontrol->value.integer.value[0];
+
+	if (GetMemoryPathEnable(Soc_Aud_Digital_Block_MEM_HDMI) == true) {
+		pr_debug("return HDMI enabled\n");
+		return 0;
+	}
+
+	return 0;
+}
 
 static int Audio_Irqcnt_Get(struct snd_kcontrol *kcontrol,
 			    struct snd_ctl_elem_value *ucontrol)
@@ -125,6 +158,8 @@ static int Audio_Irqcnt_Set(struct snd_kcontrol *kcontrol,
 }
 
 static const struct snd_kcontrol_new deep_buffer_dl_controls[] = {
+	SOC_ENUM_EXT("deep_buffer_dl_hd_Switch", deep_buffer_dl_Enum[0],
+		     deep_buffer_dl_hdoutput_get, deep_buffer_dl_hdoutput_set),
 	SOC_SINGLE_EXT("deep_buffer_irq_cnt", SND_SOC_NOPM, 0, IRQ_MAX_RATE, 0,
 		       Audio_Irqcnt_Get, Audio_Irqcnt_Set),
 };
@@ -174,6 +209,8 @@ static snd_pcm_uframes_t mtk_deep_buffer_dl_pointer(struct snd_pcm_substream
 	else
 		ptr_bytes = hw_ptr - Afe_Get_Reg(AFE_DL2_BASE);
 
+	ptr_bytes = Align64ByteSize(ptr_bytes);
+
 	return bytes_to_frames(substream->runtime, ptr_bytes);
 }
 
@@ -208,11 +245,18 @@ static int mtk_deep_buffer_dl_hw_params(struct snd_pcm_substream *substream,
 {
 	int ret = 0;
 
-	/* runtime->dma_bytes has to be set manually to allow mmap */
 	substream->runtime->dma_bytes = params_buffer_bytes(hw_params);
-	substream->runtime->dma_area = deep_buffer_dl_dma_buf->area;
-	substream->runtime->dma_addr = deep_buffer_dl_dma_buf->addr;
-	set_deep_buffer_data_buffer(substream, hw_params);
+	if (mPlaybackSramState == SRAM_STATE_PLAYBACKFULL) {
+		/* substream->runtime->dma_bytes = AFE_INTERNAL_SRAM_SIZE; */
+		substream->runtime->dma_area = (unsigned char *)Get_Afe_SramBase_Pointer();
+		substream->runtime->dma_addr = AFE_INTERNAL_SRAM_PHY_BASE;
+		AudDrv_Allocate_DL2_Buffer(mDev, substream->runtime->dma_bytes);
+	} else {
+		substream->runtime->dma_bytes = params_buffer_bytes(hw_params);
+		substream->runtime->dma_area = deep_buffer_dl_dma_buf->area;
+		substream->runtime->dma_addr = deep_buffer_dl_dma_buf->addr;
+		set_deep_buffer_data_buffer(substream, hw_params);
+	}
 
 	pr_debug("dma_bytes = %zu dma_area = %p dma_addr = 0x%lx\n",
 		 substream->runtime->dma_bytes, substream->runtime->dma_area,
@@ -235,7 +279,8 @@ static struct snd_pcm_hw_constraint_list constraints_sample_rates = {
 
 static int mtk_deep_buffer_dl_close(struct snd_pcm_substream *substream)
 {
-	pr_debug("%s\n", __func__);
+	pr_debug("%s, mPrepareDone = %d, deep_buffer_dl_hdoutput = %d\n",
+		 __func__, mPrepareDone, deep_buffer_dl_hdoutput);
 
 	if (mPrepareDone == true) {
 		SetConnection(Soc_Aud_InterCon_DisConnect, Soc_Aud_InterConnectionInput_I07,
@@ -245,12 +290,19 @@ static int mtk_deep_buffer_dl_close(struct snd_pcm_substream *substream)
 
 		/* stop DAC output */
 		SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_OUT_DAC, false);
-		if (GetI2SDacEnable() == false)
+		if (GetI2SDacEnable() == false) {
+			SetI2SADDAEnable(false);
 			SetI2SDacEnable(false);
+		}
 
 		RemoveMemifSubStream(Soc_Aud_Digital_Block_MEM_DL2, substream);
 
 		EnableAfe(false);
+
+		/* here to close APLL */
+		if (deep_buffer_dl_hdoutput == true)
+			DisableALLbySampleRate(substream->runtime->rate);
+
 		mPrepareDone = false;
 	}
 
@@ -275,9 +327,16 @@ static int mtk_deep_buffer_dl_open(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	int ret = 0;
 
-	mtk_deep_buffer_dl_hardware.buffer_bytes_max = GetPLaybackDramSize();
-	mPlaybackSramState = SRAM_STATE_PLAYBACKDRAM;
-	mPlaybackUseSram = false;
+	AfeControlSramLock();
+	if (GetSramState() == SRAM_STATE_FREE) {
+		mtk_deep_buffer_dl_hardware.buffer_bytes_max = GetPLaybackSramFullSize();
+		mPlaybackSramState = SRAM_STATE_PLAYBACKFULL;
+		SetSramState(mPlaybackSramState);
+	} else {
+		mtk_deep_buffer_dl_hardware.buffer_bytes_max = GetPLaybackDramSize();
+		mPlaybackSramState = SRAM_STATE_PLAYBACKDRAM;
+	}
+	AfeControlSramUnLock();
 	if (mPlaybackSramState == SRAM_STATE_PLAYBACKDRAM)
 		AudDrv_Emi_Clk_On();
 
@@ -310,11 +369,13 @@ static int mtk_deep_buffer_dl_prepare(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	bool mI2SWLen;
 
-	pr_debug("%s: mPrepareDone = %d, format = %d, sample rate = %d\n",
-			       __func__,
-			       mPrepareDone,
-			       runtime->format,
-			       substream->runtime->rate);
+	pr_debug(
+		"%s: mPrepareDone = %d, format = %d, sample rate = %d, deep_buffer_dl_hdoutput = %d\n",
+		__func__,
+		mPrepareDone,
+		runtime->format,
+		substream->runtime->rate,
+		deep_buffer_dl_hdoutput);
 
 	if (mPrepareDone == false) {
 		SetMemifSubStream(Soc_Aud_Digital_Block_MEM_DL2, substream);
@@ -342,12 +403,17 @@ static int mtk_deep_buffer_dl_prepare(struct snd_pcm_substream *substream)
 		SetConnection(Soc_Aud_InterCon_Connection, Soc_Aud_InterConnectionInput_I08,
 			      Soc_Aud_InterConnectionOutput_O04);
 
+		/* here to open APLL */
+		if (deep_buffer_dl_hdoutput == true)
+			EnableALLbySampleRate(runtime->rate);
 
 		/* start I2S DAC out */
 		if (GetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_OUT_DAC) == false) {
 			SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_OUT_DAC, true);
-			SetI2SDacOut(substream->runtime->rate, 0, mI2SWLen);
+			SetI2SDacOut(substream->runtime->rate,
+				     deep_buffer_dl_hdoutput, mI2SWLen);
 			SetI2SDacEnable(true);
+			SetI2SADDAEnable(true);
 		} else {
 			SetMemoryPathEnable(Soc_Aud_Digital_Block_I2S_OUT_DAC, true);
 		}

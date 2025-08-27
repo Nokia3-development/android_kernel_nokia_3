@@ -832,7 +832,7 @@ config ARCH_MT6735
 	select MFD_SYSCON
 	select MTK_BASE_POWER
 	select KERNEL_MODE_NEON
-	select CRYPTO_AES_ARM32_CE
+	select CRYPTO_AES_ARM_CE
 	select CRYPTO_SHA2_ARM_CE
 	select ARM_ERRATA_836870
 	select MTK_IRQ_NEW_DESIGN
@@ -868,7 +868,7 @@ config ARCH_MT6735M
 	select ARM_MT6735_CPUIDLE
 	select MTK_BASE_POWER
 	select KERNEL_MODE_NEON
-	select CRYPTO_AES_ARM32_CE
+	select CRYPTO_AES_ARM_CE
 	select CRYPTO_SHA2_ARM_CE
 	select ARM_ERRATA_836870
 	select MTK_IRQ_NEW_DESIGN
@@ -906,7 +906,7 @@ config ARCH_MT6753
 	select CPU_IDLE
 	select ARM_MT6735_CPUIDLE
 	select KERNEL_MODE_NEON
-	select CRYPTO_AES_ARM32_CE
+	select CRYPTO_AES_ARM_CE
 	select CRYPTO_SHA2_ARM_CE
 	select MTK_BASE_POWER
 	select ARM_ERRATA_836870
@@ -993,6 +993,7 @@ config ARCH_MT6570
 	select MTK_POWER_GS
 	select MTK_SYS_CIRQ
 	select MTK_DRAMC
+	select CPU_IDLE
 	help
 	  This enable support for MediaTek MT6570.
 
@@ -1017,7 +1018,7 @@ config ARCH_MT6755
 	select CPU_IDLE
 	select PINCTRL
 	select KERNEL_MODE_NEON
-	select CRYPTO_AES_ARM32_CE
+	select CRYPTO_AES_ARM_CE
 	select CRYPTO_SHA2_ARM_CE
 	select MTK_BASE_POWER
 	select ARM_HAS_SG_CHAIN
@@ -1936,12 +1937,15 @@ choice
 	prompt "Timer frequency"
 
 config HZ_100
+	depends on !MTK_ENABLE_AGO
 	bool "100 Hz"
 
 config HZ_200
+	depends on !MTK_ENABLE_AGO
 	bool "200 Hz"
 
 config HZ_250
+	depends on !MTK_ENABLE_AGO
 	bool "250 Hz"
 
 config HZ_300

@@ -118,6 +118,7 @@ extern struct keypad_dts_data kpd_dts_data;
 	KEY_ENDCALL, KEY_POWER,	\
 }
 
+// OEM
 #define KPD_HAS_SLIDE_QWERTY	1
 
 #if KPD_HAS_SLIDE_QWERTY

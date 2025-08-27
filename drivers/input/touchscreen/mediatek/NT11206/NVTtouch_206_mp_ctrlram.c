@@ -26,9 +26,11 @@
 #include "NVTtouch_206.h"
 
 
-struct kobject *f_tptest_kobj;
+// add by alex for TP selftest
+struct kobject *fih_tptest_kobj;
 extern uint8_t fw_ver;
 extern void nvt_get_fw_info(void);
+extern u16 fih_hwid;
 
 #if NVT_TOUCH_MP
 
@@ -355,6 +357,8 @@ int32_t nvt_load_mp_criteria(void)
 	struct file *fp = NULL;
 	char *fbufp = NULL; // buffer for content of file
 	mm_segment_t org_fs;
+	char file_path0[64]="/system/etc/nvt_firmware/MP_Criteria_Golden.csv";
+    char file_path1[64]="/system/etc/nvt_firmware/MP_DVT_Criteria_Golden.csv";
 	char file_path2[64]="/system/etc/nvt_firmware/MP_PVT_Criteria_Golden.csv";
 	struct kstat stat;
 	loff_t pos = 0;
@@ -382,7 +386,18 @@ int32_t nvt_load_mp_criteria(void)
 	org_fs = get_fs();
 	set_fs(KERNEL_DS);
 
+   if ((fih_hwid < 0x122))
+   {
+		fp = filp_open(file_path0, O_RDONLY, 0);
+   }
+   else if ((fih_hwid >= 0x122) && (fih_hwid <= 0x142))
+   {
+		fp = filp_open(file_path1, O_RDONLY, 0);
+   }
+   else
+   {
         fp = filp_open(file_path2, O_RDONLY, 0);
+   }
    
 	if (fp == NULL || IS_ERR(fp)) {
 		dev_err(&ts->client->dev, "%s: open MP_Criteria_Golden failed\n", __func__);
@@ -391,7 +406,18 @@ int32_t nvt_load_mp_criteria(void)
 		return retval;
 	}
 
+	if ((fih_hwid < 0x122))
+	{
+		retval = vfs_stat(file_path0, &stat);
+	}
+	else if ((fih_hwid >= 0x122) && (fih_hwid <= 0x142))
+	{
+		retval = vfs_stat(file_path1, &stat);
+	}
+	else
+	{
         retval = vfs_stat(file_path2, &stat);
+	}
 	
 	if (!retval) {
 		fbufp = (char *)kzalloc(stat.size + 1, GFP_KERNEL);
@@ -3472,35 +3498,36 @@ int32_t nvt_mp_proc_init(void)
 		dev_info(&ts->client->dev, "%s: create /proc/nvt_selftest Succeeded!\n", __func__);
 	}
 
-
-    f_tptest_kobj = kobject_create_and_add("android_touch", NULL);
-    if (f_tptest_kobj == NULL)
+//add by fih TP selftest
+	
+    fih_tptest_kobj = kobject_create_and_add("android_touch", NULL);
+    if (fih_tptest_kobj == NULL)
     {
         printk("%s: fih selftest subsystem register failed\n", __func__);
         return -1;
     }
 
-    ret = sysfs_create_file(f_tptest_kobj, &dev_attr_fts_selftest.attr);
+    ret = sysfs_create_file(fih_tptest_kobj, &dev_attr_fts_selftest.attr);
     if (ret)
     {
         printk("%s: sysfs_create fts_selftest failed\n", __func__);
         return ret;
     }
 
-    ret = sysfs_create_file(f_tptest_kobj, &dev_attr_fts_selftest_result.attr);
+    ret = sysfs_create_file(fih_tptest_kobj, &dev_attr_fts_selftest_result.attr);
     if (ret) {
         printk("%s: sysfs_create fts_selftest_result failed\n", __func__);
         return ret;
     }
 
-    ret = sysfs_create_file(f_tptest_kobj, &dev_attr_tp_rawdata.attr);
+    ret = sysfs_create_file(fih_tptest_kobj, &dev_attr_tp_rawdata.attr);
     if (ret)
     {
         printk("%s: sysfs_create tp_rawdata failed\n", __func__);
         return ret;
     }
 
-    ret = sysfs_create_file(f_tptest_kobj, &dev_attr_ftmgetversion.attr);
+    ret = sysfs_create_file(fih_tptest_kobj, &dev_attr_ftmgetversion.attr);
     if (ret)
     {
         printk("%s: sysfs_create ftmgetversion failed\n", __func__);
@@ -3518,11 +3545,11 @@ int32_t nvt_mp_proc_init(void)
 
 void nvt_test_sysfs_deinit(void)
 {
-    sysfs_remove_file(f_tptest_kobj, &dev_attr_ftmgetversion.attr);
-    sysfs_remove_file(f_tptest_kobj, &dev_attr_fts_selftest_result.attr);
-    sysfs_remove_file(f_tptest_kobj, &dev_attr_fts_selftest.attr);
-    sysfs_remove_file(f_tptest_kobj, &dev_attr_tp_rawdata.attr);
-    kobject_del(f_tptest_kobj);
+    sysfs_remove_file(fih_tptest_kobj, &dev_attr_ftmgetversion.attr);
+    sysfs_remove_file(fih_tptest_kobj, &dev_attr_fts_selftest_result.attr);
+    sysfs_remove_file(fih_tptest_kobj, &dev_attr_fts_selftest.attr);
+    sysfs_remove_file(fih_tptest_kobj, &dev_attr_tp_rawdata.attr);
+    kobject_del(fih_tptest_kobj);
 }
 
 

@@ -71,11 +71,18 @@ static struct i2c_board_info kd_lens_dev __initdata = {
 #define LOG_INF(format, args...)
 #endif
 
-
+//
+#ifdef CONFIG_FIH_PROJECT_NE1
 static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
 	{1, AFDRV_LC898212XDAF_F, LC898212XDAF_F_SetI2Cclient, LC898212XDAF_F_Ioctl, LC898212XDAF_F_Release},
 	{1, AFDRV_AK7371AF, AK7371AF_SetI2Cclient, AK7371AF_Ioctl, AK7371AF_Release},
 };
+#else //FRTP
+static struct stAF_DrvList g_stAF_DrvList[MAX_NUM_OF_LENS] = {
+	{0, AFDRV_LC898212XDAF_F, LC898212XDAF_F_SetI2Cclient, LC898212XDAF_F_Ioctl, LC898212XDAF_F_Release},
+	{0, AFDRV_AK7371AF, AK7371AF_SetI2Cclient, AK7371AF_Ioctl, AK7371AF_Release},
+};
+#endif
 
 static struct stAF_DrvList *g_pstAF_CurDrv;
 

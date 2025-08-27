@@ -96,8 +96,8 @@ endif
 obj-$(CONFIG_MTK_LENS)   += lens/
 obj-$(CONFIG_MTK_FLASHLIGHT)	+= flashlight/src/
 obj-$(CONFIG_RT_FLASHLIGHT)	+= flashlight/richtek/
-ifneq ($(wildcard $(srctree)/drivers/misc/mediatek/met/),)
-obj-$(CONFIG_MTK_MET) += met/
+ifneq ($(wildcard $(srctree)/drivers/misc/mediatek/met_drv/),)
+obj-y += met_drv/
 endif
 obj-$(CONFIG_MTK_CCCI_DEVICES)	+=  ccci_util/
 obj-$(CONFIG_MTK_NET_CCMNI) +=  ccmni/
@@ -131,7 +131,6 @@ obj-$(CONFIG_MTK_RAM_CONSOLE)	+= ram_console/
 obj-$(CONFIG_MTK_DRAM_LOG_STORE)	+= log_store/
 obj-$(CONFIG_MTK_USE_RESERVED_EXT_MEM) += exm/
 obj-$(CONFIG_RT_REGMAP) += rt-regmap/
-# obj-$(CONFIG_TCPC_CLASS) += pd/
 
 obj-$(CONFIG_MTK_SVP) += memory-ssvp/
 obj-$(CONFIG_ZONE_MOVABLE_CMA) += zone_movable_cma/
@@ -157,7 +156,7 @@ obj-$(CONFIG_MTK_MTD_NAND) += nand/
 obj-$(CONFIG_MTK_DUM_CHAR) += dum-char/
 obj-$(CONFIG_MTK_DYNAMIC_BOOST) += dynamic_boost/
 
-obj-$(CONFIG_MTK_DISPLAY_120HZ_SUPPORT)	+= rrc/
+
 obj-$(CONFIG_MTK_USB2JTAG_SUPPORT) += usb2jtag/
 # Crypto performance tools (disable by default)
 obj-n += crypto/
@@ -167,6 +166,5 @@ obj-$(CONFIG_TRUSTONIC_TEE_SUPPORT) += secwidevine/
 obj-$(CONFIG_MTK_POWER_GS)      += power_gs/
 obj-$(CONFIG_MTK_TINYSYS_SCP_SUPPORT) += scp/
 obj-$(CONFIG_MTK_TINYSYS_SCP_SUPPORT) += audio_ipi/
-obj-$(CONFIG_MTK_VOW_SUPPORT)	+= vow/
 obj-$(CONFIG_USB)	+= usb_boost/
 obj-$(CONFIG_RT_REGMAP) += rt-regmap/

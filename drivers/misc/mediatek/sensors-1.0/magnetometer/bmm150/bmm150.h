@@ -78,18 +78,18 @@ conversion of magnetic data to uT units
 	delay_func(delay_in_msec)
 
 #define BMM150_DELAY_POWEROFF_SUSPEND      1
-//zack modify
+// modify
 #define BMM150_DELAY_SUSPEND_SLEEP         5//2
-//end zack
+//end 
 #define BMM150_DELAY_SLEEP_ACTIVE          1
 #define BMM150_DELAY_ACTIVE_SLEEP          1
 #define BMM150_DELAY_SLEEP_SUSPEND         1
 #define BMM150_DELAY_ACTIVE_SUSPEND        1
 #define BMM150_DELAY_SLEEP_POWEROFF        1
 #define BMM150_DELAY_ACTIVE_POWEROFF       1
-//zack modify
+// modify
 #define BMM150_DELAY_SETTLING_TIME         5//2
-//end zack
+//end 
 
 
 #define BMM150_I2C_ADDRESS                 0x13

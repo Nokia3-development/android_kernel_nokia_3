@@ -195,7 +195,8 @@ s32 i2c_dma_read_1(struct i2c_client *client, uint16_t addr, uint8_t offset, uin
         memcpy(rxbuf, gpDMABuf_va, len);
         return 0;
     }
-	
+
+    BBOX_TP_I2C_READ_FAILED
     dev_err(&ts->client->dev,"Dma I2C Read Error: 0x%04X, %d byte(s), err-code: %d", addr, len, ret);
     return ret;
 }
@@ -232,6 +233,7 @@ s32 i2c_dma_write_1(struct i2c_client *client, uint16_t addr, uint8_t offset, ui
         }
         return 0;
     }
+    BBOX_TP_I2C_WRITE_FAILED
     dev_err(&client->dev,"Dma I2C Write Error: 0x%04X, %d byte(s), err-code: %d", offset, len, ret);
     return ret;
 }
@@ -257,6 +259,7 @@ s32 i2c_read_bytes_dma_1(struct i2c_client *client, u16 addr, uint8_t offset, ui
         ret = i2c_dma_read_1(client, addr, offset, rd_buf, read_len);
         if (ret < 0)
         {
+            BBOX_TP_I2C_READ_FAILED
             dev_err(&client->dev,"dma read failed");
             return -1;
         }
@@ -290,6 +293,7 @@ s32 i2c_write_bytes_dma_1(struct i2c_client *client, u16 addr, uint8_t offset, u
         
         if (ret < 0)
         {
+            BBOX_TP_I2C_WRITE_FAILED
             dev_err(&client->dev,"dma i2c write failed!");
             return -1;
         }
@@ -356,7 +360,8 @@ int i2c_read_bytes_non_dma_1(struct i2c_client *client, u16 addr,uint8_t offset,
             retry++;
 
             if (retry == 20)
-            {             
+            {
+                BBOX_TP_I2C_READ_FAILED
                 dev_err(&client->dev,"I2C read 0x%X length=%d failed\n", offset + index, len);
                 return -1;
             }
@@ -414,6 +419,7 @@ int i2c_write_bytes_non_dma_1(struct i2c_client *client, u16 addr,uint8_t offset
             retry++;
             if (retry == 20)
             {
+               BBOX_TP_I2C_WRITE_FAILED
                dev_err(&client->dev,"I2C write 0x%X length=%d failed\n", offset, len);
                return -1;
             }
@@ -1180,6 +1186,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 	NVT_INFO("tpd_i2c_probe start...");
 	ts = kmalloc(sizeof(struct nvt_ts_data), GFP_KERNEL);
 	if (ts == NULL) {
+		BBOX_TP_PROBE_FAILED
 		dev_err(&client->dev, "%s: failed to allocated memory for nvt ts data\n", __func__);
 		return -ENOMEM;
 	}
@@ -1220,6 +1227,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 
 	//---check i2c func.---
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
+		BBOX_TP_PROBE_FAILED
 		dev_err(&client->dev, "i2c_check_functionality failed. (no I2C_FUNC_I2C)\n");
 		ret = -ENODEV;
 		goto err_check_functionality_failed;
@@ -1231,6 +1239,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 	//---check chip id---
 	ret = nvt_ts_read_chipid();
 	if (ret != 0x26) {
+		BBOX_TP_PROBE_FAILED
 		NVT_INFO("nvt_ts_read_chipid is not 0x26. ret=0x%02X\n", ret);
 		dev_err(&client->dev, "nvt_ts_read_chipid is not 0x26. ret=0x%02X\n", ret);
 		ret = -EINVAL;
@@ -1246,6 +1255,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 	//---allocate input device---
 	ts->input_dev = input_allocate_device();
 	if (ts->input_dev == NULL) {
+		BBOX_TP_PROBE_FAILED
 		dev_err(&client->dev, "%s: allocate input device failed\n", __func__);
 		ret = -ENOMEM;
 		goto err_input_dev_alloc_failed;
@@ -1254,6 +1264,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 #if BOOT_UPDATE_FIRMWARE
 	nvt_fwu_wq = create_singlethread_workqueue("nvt_fwu_wq");
 	if (!nvt_fwu_wq) {
+		BBOX_TP_PROBE_FAILED
 		dev_err(&client->dev, "%s: nvt_fwu_wq create workqueue failed\n", __func__);
 		ret = -ENOMEM;
 		goto err_create_nvt_fwu_wq_failed;
@@ -1322,6 +1333,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 	//---register input device---
 	ret = input_register_device(ts->input_dev);
 	if (ret) {
+		BBOX_TP_PROBE_FAILED
 		dev_err(&client->dev, "register input device (%s) failed. ret=%d\n", ts->input_dev->name, ret);
 		goto err_input_register_device_failed;
 	}
@@ -1333,6 +1345,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 	
 	ret = tpd_irq_registration();
 	if(ret != 0){
+		BBOX_TP_PROBE_FAILED
 		NVT_ERROR("tpd register irq failed!\n");
 		goto err_int_request_failed;
 	}
@@ -1348,6 +1361,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 #if NVT_TOUCH_PROC
 	ret = nvt_flash_proc_init();
 	if (ret != 0) {
+		BBOX_TP_PROBE_FAILED
 		dev_err(&client->dev, "nvt flash proc init failed. ret=%d\n", ret);
 		goto err_init_NVT_ts;
 	}
@@ -1356,6 +1370,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 #if NVT_TOUCH_EXT_PROC
 	ret = nvt_extra_proc_init();
 	if (ret != 0) {
+		BBOX_TP_PROBE_FAILED
 		dev_err(&client->dev, "nvt extra proc init failed. ret=%d\n", ret);
 		goto err_init_NVT_ts;
 	}
@@ -1364,6 +1379,7 @@ static int nvt_i2c_probe(struct i2c_client *client, const struct i2c_device_id *
 #if NVT_TOUCH_MP
 	ret = nvt_mp_proc_init();
 	if (ret != 0) {
+		BBOX_TP_PROBE_FAILED
 		dev_err(&client->dev, "nvt mp proc init failed. ret=%d\n", ret);
 		goto err_init_NVT_ts;
 	}
@@ -1520,7 +1536,7 @@ static int touch_event_handler(void *unused)
 					input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, input_y);
 					input_report_abs(ts->input_dev, ABS_MT_TOUCH_MAJOR, input_w);
 					input_report_abs(ts->input_dev, ABS_MT_PRESSURE, input_w);
-				//	NVT_INFO("report abs:x=%d, y=%d\n",input_x,input_y);
+					//NVT_INFO("report abs:x=%d, y=%d\n",input_x,input_y);
 					finger_cnt++;
 				}
 			}

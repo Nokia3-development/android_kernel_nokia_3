@@ -55,3 +55,4 @@ musb_hdrc-$(CONFIG_USB_MTK_HDRC) += musbhsdma.o
 
 # QMU Realted
 obj-$(CONFIG_MTK_MUSB_QMU_SUPPORT) += mtk_qmu.o musb_qmu.o
+obj-$(CONFIG_DUAL_ROLE_USB_INTF) += mtk_dual_role.o

@@ -64,18 +64,21 @@ int32_t update_firmware_request(char *filename)
 
 	ret = request_firmware(&fw_entry, filename, &ts->client->dev);
 	if (ret) {
+		BBOX_TP_FW_UPGRADE_FAILED
 		dev_err(&ts->client->dev, "%s: firmware load failed, ret=%d\n", __func__, ret);
 		return ret;
 	}
 
 	// check bin file size (124kb)
 	if (fw_entry->size != FW_BIN_SIZE_124KB) {
+		BBOX_TP_FW_UPGRADE_FAILED
 		dev_err(&ts->client->dev, "%s: bin file size not match. (%zu)\n", __func__, fw_entry->size);
 		return -EINVAL;
 	}
 
 	// check if FW version add FW version bar equals 0xFF
 	if (*(fw_entry->data + FW_BIN_VER_OFFSET) + *(fw_entry->data + FW_BIN_VER_BAR_OFFSET) != 0xFF) {
+		BBOX_TP_FW_UPGRADE_FAILED
 		dev_err(&ts->client->dev, "%s: bin file FW_VER + FW_VER_BAR should be 0xFF!\n", __func__);
 		dev_err(&ts->client->dev, "%s: FW_VER=0x%02X, FW_VER_BAR=0x%02X\n", __func__, *(fw_entry->data+FW_BIN_VER_OFFSET), *(fw_entry->data+FW_BIN_VER_BAR_OFFSET));
 		return -EINVAL;
@@ -146,6 +149,7 @@ int32_t Check_FW_Ver(void)
 	#endif
 	// check IC FW_VER + FW_VER_BAR equals 0xFF or not, need to update if not
 	if ((buf[1] + buf[2]) != 0xFF) {
+		BBOX_TP_FW_UPGRADE_FAILED
 		dev_err(&ts->client->dev, "%s: IC FW_VER + FW_VER_BAR not equals to 0xFF!\n", __func__);
 		return 0;
 	}
@@ -252,6 +256,7 @@ int32_t Check_CheckSum(void)
 			buf[2] = (XDATA_Addr >> 8) & 0xFF;
 			ret = CTP_I2C_WRITE(ts->client, I2C_FW_Address, buf, 3);
 			if (ret < 0) {
+				BBOX_TP_FW_UPGRADE_FAILED
 				dev_err(&ts->client->dev,"%s: Read Checksum (write addr high byte & middle byte) error!!(%d)\n", __func__, ret);
 				return ret;
 			}
@@ -261,12 +266,14 @@ int32_t Check_CheckSum(void)
 			buf[2] = 0x00;
 			ret = CTP_I2C_READ(ts->client, I2C_FW_Address, buf, 3);
 			if (ret < 0) {
+				BBOX_TP_FW_UPGRADE_FAILED
 				dev_err(&ts->client->dev,"%s: Read Checksum error!!(%d)\n", __func__, ret);
 				return ret;
 			}
 
 			RD_Filechksum[i] = (uint16_t)((buf[2] << 8) | buf[1]);
 			if (WR_Filechksum[i] != RD_Filechksum[i]) {
+				BBOX_TP_FW_UPGRADE_FAILED
 				dev_err(&ts->client->dev,"RD_Filechksum[%d]=0x%04X, WR_Filechksum[%d]=0x%04X\n", i, RD_Filechksum[i], i, WR_Filechksum[i]);
 				dev_err(&ts->client->dev, "%s: firmware checksum not match!!\n", __func__);
 				return 0;
@@ -601,6 +608,7 @@ int32_t Write_Flash(void)
 			buf[1] = 0x00;
 			ret = CTP_I2C_READ(ts->client, I2C_HW_Address, buf, 2);
 			if (ret < 0) {
+				BBOX_TP_FW_UPGRADE_FAILED
 				dev_err(&ts->client->dev,"%s: Page Program error!!(%d)\n", __func__, ret);
 				return ret;
 			}
@@ -609,11 +617,13 @@ int32_t Write_Flash(void)
 			}
 			retry++;
 			if (unlikely(retry > 5)) {
+				BBOX_TP_FW_UPGRADE_FAILED
 				dev_err(&ts->client->dev,"%s: Check 0xAA (Page Program) failed, buf[1]=0x%02X, retry=%d\n", __func__, buf[1], retry);
 				return -1;
 			}
 		}
 		if (buf[1] == 0xEA) {
+			BBOX_TP_FW_UPGRADE_FAILED
 			dev_err(&ts->client->dev,"%s: Page Program error!! i=%d\n", __func__, i);
 			return -3;
 		}
@@ -626,6 +636,7 @@ int32_t Write_Flash(void)
 			buf[1] = 0x05;
 			ret = CTP_I2C_WRITE(ts->client, I2C_HW_Address, buf, 2);
 			if (ret < 0) {
+				BBOX_TP_FW_UPGRADE_FAILED
 				dev_err(&ts->client->dev,"%s: Read Status error!!(%d)\n", __func__, ret);
 				return ret;
 			}
@@ -636,6 +647,7 @@ int32_t Write_Flash(void)
 			buf[2] = 0x00;
 			ret = CTP_I2C_READ(ts->client, I2C_HW_Address, buf, 3);
 			if (ret < 0) {
+				BBOX_TP_FW_UPGRADE_FAILED
 				dev_err(&ts->client->dev,"%s: Check 0xAA (Read Status) error!!(%d)\n", __func__, ret);
 				return ret;
 			}
@@ -644,11 +656,13 @@ int32_t Write_Flash(void)
 			}
 			retry++;
 			if (unlikely(retry > 5)) {
+				BBOX_TP_FW_UPGRADE_FAILED
 				dev_err(&ts->client->dev,"%s: Check 0xAA (Read Status) failed, buf[1]=0x%02X, buf[2]=0x%02X, retry=%d\n", __func__, buf[1], buf[2], retry);
 				return -1;
 			}
 		}
 		if (buf[1] == 0xEA) {
+			BBOX_TP_FW_UPGRADE_FAILED
 			dev_err(&ts->client->dev,"%s: Page Program error!! i=%d\n", __func__, i);
 			return -4;
 		}
@@ -830,6 +844,7 @@ void Boot_Update_Firmware(struct work_struct *work)
 	// request bin file in "/etc/firmware"
 	ret = update_firmware_request(firmware_name);
 	if (ret) {
+		BBOX_TP_FW_UPGRADE_FAILED
 		dev_err(&client->dev, "%s: update_firmware_request failed. (%d)\n", __func__, ret);
 		return;
 	}
@@ -846,9 +861,11 @@ void Boot_Update_Firmware(struct work_struct *work)
 			BUFFER_DATA[FW_BIN_VER_OFFSET], BUFFER_DATA[FW_BIN_VER_BAR_OFFSET]);
     #endif
 	if (ret < 0) {	// read firmware checksum failed
+		BBOX_TP_FW_UPGRADE_FAILED
 		dev_err(&client->dev, "%s: read firmware checksum failed\n", __func__);
 		Update_Firmware();
 	} else if ((ret == 0) && (Check_FW_Ver() == 0)) {	// (fw checksum not match) && (bin fw version >= ic fw version)
+		BBOX_TP_FW_UPGRADE_FAILED
 		dev_info(&client->dev, "%s: firmware version not match\n", __func__);
 		Update_Firmware();
 	} else {

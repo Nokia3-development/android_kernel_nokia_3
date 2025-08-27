@@ -2106,10 +2106,10 @@ int32_t cmdqCoreRegisterTrackTaskCB(CMDQ_GROUP_ENUM engGroup,
 	return 0;
 }
 
-struct TaskStruct *cmdq_core_get_task_ptr(void *task_handle)
+struct TaskStruct *cmdq_core_get_task_ptr(struct TaskStruct *task_handle)
 {
 	struct TaskStruct *ptr = NULL;
-	struct TaskStruct *task = NULL;
+	struct TaskStruct *task;
 
 	mutex_lock(&gCmdqTaskMutex);
 
@@ -2121,8 +2121,10 @@ struct TaskStruct *cmdq_core_get_task_ptr(void *task_handle)
 	}
 
 	if (!ptr) {
-		list_for_each_entry(task, &gCmdqContext.taskWaitList, listEntry) {
-			if (task == task_handle && TASK_STATE_WAITING == task->taskState) {
+		list_for_each_entry(task, &gCmdqContext.taskWaitList,
+			listEntry) {
+			if (task == task_handle &&
+				TASK_STATE_WAITING == task->taskState) {
 				ptr = task;
 				break;
 			}
@@ -2722,8 +2724,7 @@ static int32_t cmdq_core_copy_buffer_impl(void *dst, void *src, const uint32_t s
 	} else {
 		CMDQ_VERBOSE("COMMAND: Copy user to 0x%p\n", dst);
 		if (copy_from_user(dst, src, size)) {
-			CMDQ_AEE("CMDQ",
-				 "CRDISPATCH_KEY:CMDQ Fail to copy from user 0x%p, size:%d\n",
+			CMDQ_MSG("CRDISPATCH_KEY:CMDQ Fail to copy from user 0x%p, size:%d\n",
 				 src, size);
 			status = -ENOMEM;
 		}
@@ -2742,6 +2743,8 @@ int32_t cmdq_core_copy_cmd_to_task_impl(struct TaskStruct *pTask, void *src, con
 	while (remaind_cmd_size > 0) {
 		/* extend buffer to copy more instruction */
 		status = cmdq_core_extend_cmd_buffer(pTask);
+		if (status < 0)
+			return status;
 
 		copy_size = pTask->buf_available_size > remaind_cmd_size ?
 			remaind_cmd_size : pTask->buf_available_size;
@@ -3190,8 +3193,8 @@ static TaskStruct *cmdq_core_acquire_task(cmdqCommandStruct *pCommandDesc,
 		    pCommandDesc->secData.enginesNeedPortSecurity;
 		pTask->secData.addrMetadataCount = pCommandDesc->secData.addrMetadataCount;
 		if (pTask->secData.is_secure == true && pTask->secData.addrMetadataCount > 0) {
-			uint32_t metadata_length = 0;
-			void *p_metadatas = NULL;
+			uint32_t metadata_length;
+			void *p_metadatas;
 
 			metadata_length = (pTask->secData.addrMetadataCount) * sizeof(cmdqSecAddrMetadataStruct);
 			/* create sec data task buffer for working */
@@ -3208,9 +3211,10 @@ static TaskStruct *cmdq_core_acquire_task(cmdqCommandStruct *pCommandDesc,
 			}
 			memcpy(p_metadatas, CMDQ_U32_PTR(pCommandDesc->secData.addrMetadatas),
 			       metadata_length);
-			pTask->secData.addrMetadatas = (cmdqU32Ptr_t)(unsigned long)p_metadatas;
+			pTask->secData.addrMetadatas =
+				(cmdqU32Ptr_t)(unsigned long)p_metadatas;
 		} else {
-			pTask->secData.addrMetadatas = (cmdqU32Ptr_t)(unsigned long)NULL;
+			pTask->secData.addrMetadatas = 0;
 		}
 #endif
 
@@ -4002,7 +4006,7 @@ int32_t cmdq_core_subsys_from_phys_addr(uint32_t physAddr)
 
 	if (-1 == subsysID) {
 		/* printf error message */
-		CMDQ_ERR("unrecognized subsys, physAddr:0x%08x\n", physAddr);
+		CMDQ_MSG("unrecognized subsys, physAddr:0x%08x\n", physAddr);
 	}
 	return subsysID;
 }
@@ -7740,7 +7744,8 @@ int32_t cmdqCoreWaitResultAndReleaseTask(TaskStruct *pTask, cmdqRegValueStruct *
 
 	/*  */
 	/* retrieve result */
-	if (pResult && pResult->count && pResult->count <= CMDQ_MAX_DUMP_REG_COUNT) {
+	if (pResult && pResult->count &&
+		pResult->count <= CMDQ_MAX_DUMP_REG_COUNT) {
 		/* clear results */
 		memset(CMDQ_U32_PTR(pResult->regValues), 0,
 		       pResult->count * sizeof(CMDQ_U32_PTR(pResult->regValues)[0]));
@@ -8147,8 +8152,8 @@ int32_t cmdq_core_get_running_task_by_engine_unlock(uint64_t engineFlag,
 int32_t cmdq_core_get_running_task_by_engine(uint64_t engineFlag,
 	uint32_t userDebugStrLen, struct TaskStruct *p_out_task)
 {
-	int32_t result = 0;
-	unsigned long flags = 0;
+	int32_t result;
+	unsigned long flags;
 
 	/* make sure context does not change during get and copy */
 	spin_lock_irqsave(&gCmdqExecLock, flags);

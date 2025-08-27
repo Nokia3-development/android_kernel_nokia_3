@@ -25,6 +25,7 @@
 #include <asm-generic/percpu.h>
 #include <asm-generic/sections.h>
 #include <asm/page.h>
+#include <asm/irq.h>
 #include <smp.h>
 #include <mrdump.h>
 #include <mt-plat/aee.h>
@@ -83,41 +84,39 @@ __weak void get_disp_dump_buffer(unsigned long *addr, unsigned long *size, unsig
 {
 }
 
+__weak void get_hang_detect_buffer(unsigned long *addr, unsigned long *size, unsigned long *start)
+{
+}
+
 __weak struct vm_struct *find_vm_area(const void *addr)
 {
 	return NULL;
 }
 
-#undef virt_addr_valid
-#ifdef CONFIG_MODULES
-#define virt_addr_valid(kaddr) (((void *)(kaddr) >= (void *)PAGE_OFFSET && \
-				(void *)(kaddr) < (void *)high_memory && \
-				pfn_valid(__pa(kaddr) >> PAGE_SHIFT)) || \
-				is_module_address((unsigned long)kaddr))
+#ifdef __aarch64__
+#define MIN_MARGIN KIMAGE_VADDR
 #else
-#define virt_addr_valid(kaddr) ((void *)(kaddr) >= (void *)PAGE_OFFSET && \
-				(void *)(kaddr) < (void *)high_memory && \
-				pfn_valid(__pa(kaddr) >> PAGE_SHIFT))
+#define MIN_MARGIN PAGE_OFFSET
 #endif
 
-void check_addr_valid(unsigned long addr, unsigned long *low, unsigned long *high)
+static void check_addr_valid(unsigned long addr, unsigned long *low, unsigned long *high)
 {
 	unsigned long l = *low;
 	unsigned long h = *high;
 
 	while (l < addr) {
-		if (!virt_addr_valid(l)) {
+		if (!mrdump_virt_addr_valid(l)) {
 			*low += PAGE_SIZE;
-			LOGE("address(0x%lx), low is invalid(0x%lx), new low is 0x%lx\n", addr, l, *low);
+			/* LOGE("address(0x%lx), low is invalid(0x%lx), new low is 0x%lx\n", addr, l, *low); */
 		}
 		l += PAGE_SIZE;
 	}
 	if (*low > addr)
 		*low = addr;
 	while (h > addr) {
-		if (!virt_addr_valid(h)) {
+		if (!mrdump_virt_addr_valid(h)) {
 			*high -= PAGE_SIZE;
-			LOGE("address(0x%lx), high is invalid(0x%lx), new high is 0x%lx\n", addr, l, *high);
+			/* LOGE("address(0x%lx), high is invalid(0x%lx), new high is 0x%lx\n", addr, l, *high); */
 		}
 		h -= PAGE_SIZE;
 	}
@@ -203,6 +202,7 @@ static void fill_prstatus(struct elf_prstatus *prstatus, struct pt_regs *regs,
 	elf_core_copy_regs(&prstatus->pr_reg, regs);
 	prstatus->pr_pid = pid;
 	prstatus->pr_ppid = NR_CPUS;
+	prstatus->pr_sigpend = (uintptr_t)p;
 }
 
 static int fill_psinfo(struct elf_prpsinfo *psinfo)
@@ -234,7 +234,7 @@ void mrdump_mini_add_misc_pa(unsigned long va, unsigned long pa, unsigned long s
 		mrdump_mini_ehdr->misc[i].data.paddr = pa;
 		mrdump_mini_ehdr->misc[i].data.size = size;
 		mrdump_mini_ehdr->misc[i].data.start =
-		    virt_addr_valid((void *)start) ? __pa(start) : 0;
+		    mrdump_virt_addr_valid((void *)start) ? __pa(start) : 0;
 		fill_note_L(note, name, NT_IPANIC_MISC, sizeof(struct mrdump_mini_elf_misc));
 		break;
 	}
@@ -242,7 +242,7 @@ void mrdump_mini_add_misc_pa(unsigned long va, unsigned long pa, unsigned long s
 
 void mrdump_mini_add_misc(unsigned long addr, unsigned long size, unsigned long start, char *name)
 {
-	if (!virt_addr_valid((void *)addr))
+	if (!mrdump_virt_addr_valid((void *)addr))
 		return;
 	mrdump_mini_add_misc_pa(addr, __pa(addr), size, start, name);
 }
@@ -254,7 +254,7 @@ int kernel_addr_valid(unsigned long addr)
 	pmd_t *pmd;
 	pte_t *pte;
 
-	if (addr < PAGE_OFFSET)
+	if (addr < MIN_MARGIN)
 		return 0;
 
 	pgd = pgd_offset_k(addr);
@@ -427,11 +427,11 @@ void mrdump_mini_add_entry(unsigned long addr, unsigned long size)
 		return;
 	}
 #endif
-	if (addr < PAGE_OFFSET)
+	if (addr < MIN_MARGIN)
 		return;
 	hnew = ALIGN(addr + size / 2, PAGE_SIZE);
 	lnew = hnew - ALIGN(size, PAGE_SIZE);
-	if (!virt_addr_valid(addr)) {
+	if (!mrdump_virt_addr_valid(addr)) {
 		/* vma = find_vma(&init_mm, addr); */
 		/* pr_notice("mirdump: add: %p, vma: %x", addr, vma); */
 		/* if (!vma) */
@@ -450,7 +450,7 @@ void mrdump_mini_add_entry(unsigned long addr, unsigned long size)
 		paddr = __pfn_to_phys(vmalloc_to_pfn((void *)lnew));
 	} else {
 		check_addr_valid(addr, &lnew, &hnew);
-		lnew = max(lnew, PAGE_OFFSET);
+		lnew = max(lnew, MIN_MARGIN);
 		hnew = min_t(unsigned long, hnew, (unsigned long)high_memory);
 		paddr = __pa(lnew);
 	}
@@ -480,46 +480,65 @@ void mrdump_mini_add_entry(unsigned long addr, unsigned long size)
 		LOGE("mrdump: MINI_NR_SECTION overflow!\n");
 }
 
-static void mrdump_mini_add_tsk_ti(int cpu, struct pt_regs *regs, int stack)
+static void mrdump_mini_add_tsk_ti(int cpu, struct pt_regs *regs, struct task_struct *tsk, int stack)
 {
-	struct task_struct *tsk = NULL;
 	struct thread_info *ti = NULL;
 	unsigned long *bottom = NULL;
 	unsigned long *top = NULL;
 	unsigned long *p;
 
-	if (virt_addr_valid(regs->reg_sp)) {
-		ti = (struct thread_info *)(regs->reg_sp & ~(THREAD_SIZE - 1));
-		tsk = ti->task;
-		bottom = (unsigned long *)regs->reg_sp;
+	if (!mrdump_virt_addr_valid(tsk)) {
+		LOGE("mrdump: cpu:[%d] invalid task pointer:%p\n", cpu, tsk);
+		if (cpu < num_possible_cpus())
+			tsk = cpu_curr(cpu);
+		else
+			LOGE("mrdump: cpu:[%d] overflow with total:%d\n", cpu, num_possible_cpus());
 	}
-	if (!(virt_addr_valid(tsk) && tsk != NULL && ti == (struct thread_info *)tsk->stack)
-	    && virt_addr_valid(regs->reg_fp)) {
-		ti = (struct thread_info *)(regs->reg_fp & ~(THREAD_SIZE - 1));
-		tsk = ti->task;
-		bottom = (unsigned long *)regs->reg_fp;
-	}
-	if (!virt_addr_valid(tsk) || (tsk != NULL && ti != (struct thread_info *)tsk->stack)) {
-		tsk = cpu_curr(cpu);
-		if (virt_addr_valid(tsk)) {
-			ti = (struct thread_info *)tsk->stack;
-			bottom = (unsigned long *)((void *)ti + sizeof(struct thread_info));
-		}
-	}
+	if (!mrdump_virt_addr_valid(tsk))
+		LOGE("mrdump: cpu:[%d] CAN'T get a valid task pointer:%p\n", cpu, tsk);
+	else
+		ti = (struct thread_info *)tsk->stack;
 
+	bottom = (unsigned long *)regs->reg_sp;
 	mrdump_mini_add_entry(regs->reg_sp, MRDUMP_MINI_SECTION_SIZE);
 	mrdump_mini_add_entry((unsigned long)ti, MRDUMP_MINI_SECTION_SIZE);
 	mrdump_mini_add_entry((unsigned long)tsk, MRDUMP_MINI_SECTION_SIZE);
 	LOGE("mrdump: cpu[%d] tsk:%p ti:%p\n", cpu, tsk, ti);
 	if (!stack)
 		return;
+#ifdef __aarch64__
+#ifdef IRQ_STACK_PTR
+	if (on_irq_stack((unsigned long)bottom, cpu))
+		top = (unsigned long *)IRQ_STACK_PTR(cpu);
+	else {
+		top = (unsigned long *)ALIGN((unsigned long)bottom, THREAD_SIZE);
+		p = (unsigned long *)((void *)ti + THREAD_SIZE);
+		if (!mrdump_virt_addr_valid(top) || !mrdump_virt_addr_valid(bottom)
+			|| top != p || bottom > top) {
+			LOGE("mrdump: unexpected case bottom:%p top:%p ti + THREAD_SIZE:%p\n",
+				bottom, top, p);
+			return;
+		}
+	}
+#else
+	top = (unsigned long *)ALIGN((unsigned long)bottom, THREAD_SIZE);
+	p = (unsigned long *)((void *)ti + THREAD_SIZE);
+	if (!mrdump_virt_addr_valid(top) || !mrdump_virt_addr_valid(bottom)
+		|| top != p || bottom > top) {
+		LOGE("mrdump: unexpected case bottom:%p top:%p ti + THREAD_SIZE:%p\n",
+			bottom, top, p);
+		return;
+	}
+#endif
+#else
 	top = (unsigned long *)((void *)ti + THREAD_SIZE);
-	if (!virt_addr_valid(ti) || !virt_addr_valid(top) || bottom < (unsigned long *)ti
+	if (!mrdump_virt_addr_valid(ti) || !mrdump_virt_addr_valid(top) || bottom < (unsigned long *)ti
 	    || bottom > top)
 		return;
+#endif
 
 	for (p = (unsigned long *)ALIGN((unsigned long)bottom, sizeof(unsigned long)); p < top; p++) {
-		if (!virt_addr_valid(*p))
+		if (!mrdump_virt_addr_valid(*p))
 			continue;
 		if (*p >= (unsigned long)ti && *p <= (unsigned long)top)
 			continue;
@@ -529,7 +548,7 @@ static void mrdump_mini_add_tsk_ti(int cpu, struct pt_regs *regs, int stack)
 	}
 }
 
-static int mrdump_mini_cpu_regs(int cpu, struct pt_regs *regs, int main)
+static int mrdump_mini_cpu_regs(int cpu, struct pt_regs *regs, struct task_struct *tsk, int main)
 {
 	char name[NOTE_NAME_SHORT];
 	int id;
@@ -544,15 +563,15 @@ static int mrdump_mini_cpu_regs(int cpu, struct pt_regs *regs, int main)
 	if (strncmp(mrdump_mini_ehdr->prstatus[id].name, "NA", 2))
 		return -1;
 	snprintf(name, NOTE_NAME_SHORT - 1, main ? "ke%d" : "core%d", cpu);
-	fill_prstatus(&mrdump_mini_ehdr->prstatus[id].data, regs, 0, id ? id : (100 + cpu));
+	fill_prstatus(&mrdump_mini_ehdr->prstatus[id].data, regs, tsk, id ? id : (100 + cpu));
 	fill_note_S(&mrdump_mini_ehdr->prstatus[id].note, name, NT_PRSTATUS,
 		    sizeof(struct elf_prstatus));
 	return 0;
 }
 
-void mrdump_mini_per_cpu_regs(int cpu, struct pt_regs *regs)
+void mrdump_mini_per_cpu_regs(int cpu, struct pt_regs *regs, struct task_struct *tsk)
 {
-	mrdump_mini_cpu_regs(cpu, regs, 0);
+	mrdump_mini_cpu_regs(cpu, regs, tsk, 0);
 }
 EXPORT_SYMBOL(mrdump_mini_per_cpu_regs);
 
@@ -569,13 +588,13 @@ void mrdump_mini_build_task_info(struct pt_regs *regs)
 	struct task_struct *previous;
 	struct aee_process_info *cur_proc;
 
-	if (!virt_addr_valid(current_thread_info())) {
+	if (!mrdump_virt_addr_valid(current_thread_info())) {
 		LOGE("current thread info invalid\n");
 		return;
 	}
-	cur = current_thread_info()->task;
+	cur = current;
 	tsk = cur;
-	if (!virt_addr_valid(tsk)) {
+	if (!mrdump_virt_addr_valid(tsk)) {
 		LOGE("tsk invalid\n");
 		return;
 	}
@@ -592,7 +611,7 @@ void mrdump_mini_build_task_info(struct pt_regs *regs)
 		sz += snprintf(symbol + sz, 96 - sz, "[%s, %d]", tsk->comm, tsk->pid);
 		previous = tsk;
 		tsk = tsk->real_parent;
-		if (!virt_addr_valid(tsk)) {
+		if (!mrdump_virt_addr_valid(tsk)) {
 			LOGE("tsk(%p) invalid (previous: [%s, %d])\n", tsk, previous->comm, previous->pid);
 			break;
 		}
@@ -680,7 +699,7 @@ void mrdump_mini_ke_cpu_regs(struct pt_regs *regs)
 	}
 	cpu = get_HW_cpuid();
 	mrdump_modules_info(NULL, -1);
-	mrdump_mini_cpu_regs(cpu, regs, 1);
+	mrdump_mini_cpu_regs(cpu, regs, current, 1);
 	mrdump_mini_add_loads();
 	mrdump_mini_build_task_info(regs);
 }
@@ -741,17 +760,18 @@ static void mrdump_mini_add_loads(void)
 		if (!strncmp(mrdump_mini_ehdr->prstatus[id].name, "NA", 2))
 			continue;
 		prstatus = &mrdump_mini_ehdr->prstatus[id].data;
+		tsk = (prstatus->pr_sigpend != 0) ? (struct task_struct *)prstatus->pr_sigpend : current;
 		memcpy(&regs, &prstatus->pr_reg, sizeof(prstatus->pr_reg));
 		if (prstatus->pr_pid >= 100) {
 			for (i = 0; i < ELF_NGREG; i++)
 				mrdump_mini_add_entry(((unsigned long *)&regs)[i],
 						      MRDUMP_MINI_SECTION_SIZE);
 			cpu = prstatus->pr_pid - 100;
-			mrdump_mini_add_tsk_ti(cpu, &regs, 1);
+			mrdump_mini_add_tsk_ti(cpu, &regs, tsk, 1);
 			mrdump_mini_add_entry((unsigned long)cpu_rq(cpu), MRDUMP_MINI_SECTION_SIZE);
 		} else if (prstatus->pr_pid <= NR_CPUS) {
 			cpu = prstatus->pr_pid - 1;
-			mrdump_mini_add_tsk_ti(cpu, &regs, 0);
+			mrdump_mini_add_tsk_ti(cpu, &regs, tsk, 0);
 			for (i = 0; i < ELF_NGREG; i++) {
 				mrdump_mini_add_entry(((unsigned long *)&regs)[i],
 					MRDUMP_MINI_SECTION_SIZE);
@@ -767,7 +787,7 @@ static void mrdump_mini_add_loads(void)
 	if (dump_all_cpus) {
 		for (cpu = 0; cpu < NR_CPUS; cpu++) {
 			tsk = cpu_curr(cpu);
-			if (virt_addr_valid(tsk))
+			if (mrdump_virt_addr_valid(tsk))
 				ti = (struct thread_info *)tsk->stack;
 			else
 				ti = NULL;
@@ -785,7 +805,7 @@ static void mrdump_mini_add_loads(void)
 #if 0
 	if (logbuf_lock.owner_cpu < NR_CPUS) {
 		tsk = cpu_curr(logbuf_lock.owner_cpu);
-		if (virt_addr_valid(tsk))
+		if (mrdump_virt_addr_valid(tsk))
 			ti = (struct thread_info *)tsk->stack;
 		else
 			ti = NULL;
@@ -905,7 +925,7 @@ int mrdump_mini_init(void)
 
 	memset_io(&regs, 0, sizeof(struct pt_regs));
 	for (i = 0; i < NR_CPUS + 1; i++) {
-		fill_prstatus(&mrdump_mini_ehdr->prstatus[i].data, &regs, 0, i);
+		fill_prstatus(&mrdump_mini_ehdr->prstatus[i].data, &regs, NULL, i);
 		fill_note_S(&mrdump_mini_ehdr->prstatus[i].note, "NA", NT_PRSTATUS,
 			    sizeof(struct elf_prstatus));
 	}

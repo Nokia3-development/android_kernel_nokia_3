@@ -327,11 +327,12 @@ static void cmdq_driver_process_read_address_request(cmdqReadAddressStruct *req_
 
 static long cmdq_driver_destroy_secure_medadata(cmdqCommandStruct *pCommand)
 {
+#ifdef CMDQ_SECURE_PATH_SUPPORT
 	if (pCommand->secData.addrMetadatas) {
 		kfree(CMDQ_U32_PTR(pCommand->secData.addrMetadatas));
 		pCommand->secData.addrMetadatas = (cmdqU32Ptr_t) (unsigned long)NULL;
 	}
-
+#endif
 	return 0;
 }
 
@@ -341,13 +342,16 @@ static long cmdq_driver_create_secure_medadata(cmdqCommandStruct *pCommand)
 	void *pAddrMetadatas = NULL;
 	uint32_t length;
 
-	if (pCommand->secData.addrMetadataCount >= CMDQ_IWC_MAX_ADDR_LIST_LENGTH) {
+	if (pCommand->secData.addrMetadataCount >=
+		CMDQ_IWC_MAX_ADDR_LIST_LENGTH) {
 		CMDQ_ERR("Metadata %u reach the max allowed number = %u\n",
-			 pCommand->secData.addrMetadataCount, CMDQ_IWC_MAX_ADDR_LIST_LENGTH);
-		return -EFAULT;
+			pCommand->secData.addrMetadataCount,
+			CMDQ_IWC_MAX_ADDR_LIST_LENGTH);
+		return -EOVERFLOW;
 	}
 
-	length = pCommand->secData.addrMetadataCount * sizeof(struct cmdqSecAddrMetadataStruct);
+	length = pCommand->secData.addrMetadataCount *
+		sizeof(struct cmdqSecAddrMetadataStruct);
 
 
 	/* verify parameter */
@@ -396,6 +400,8 @@ static long cmdq_driver_create_secure_medadata(cmdqCommandStruct *pCommand)
 #if 0
 	cmdq_core_dump_secure_metadata(&(pCommand->secData));
 #endif
+#else
+	pCommand->secData.addrMetadatas = 0;
 #endif
 	return 0;
 }
@@ -619,10 +625,11 @@ static long cmdq_ioctl(struct file *pFile, unsigned int code, unsigned long para
 		}
 
 		/* verify job handle */
-		pTask = cmdq_core_get_task_ptr((void *)(unsigned long)jobResult.hJob);
+		pTask = cmdq_core_get_task_ptr((struct TaskStruct *)
+			(unsigned long)jobResult.hJob);
 		if (!pTask) {
 			CMDQ_ERR("invalid task ptr = 0x%llx\n", jobResult.hJob);
-			return -EFAULT;
+			return -EINVAL;
 		}
 
 		if (pTask->regCount > CMDQ_MAX_DUMP_REG_COUNT)

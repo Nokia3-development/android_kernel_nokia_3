@@ -2325,9 +2325,10 @@ static MINT32 ISP_WriteReg(ISP_REG_IO_STRUCT *pRegIo)
 	/* MUINT8 *pData = NULL; */
 	ISP_REG_STRUCT *pData = NULL;
 
+	/* The maximum number of Count should equal to PAGE_SIZE/sizeof(MUINT32)*/
 	if (pRegIo->Count > (PAGE_SIZE/sizeof(MUINT32))) {
-		LOG_ERR("pRegIo->Count error");
-		Ret = -EFAULT;
+		LOG_DBG("pRegIo->Count error");
+		Ret = -EINVAL;
 		goto EXIT;
 	}
 
@@ -3727,7 +3728,7 @@ static MINT32 ISP_WaitIrq(ISP_WAIT_IRQ_STRUCT WaitIrq)
 	}
 #endif
 	if ((WaitIrq.Type >= ISP_IRQ_TYPE_AMOUNT) || (WaitIrq.Type < 0)) {
-		Ret = -EFAULT;
+		Ret = -EINVAL;
 		LOG_ERR("invalid type(%d)", WaitIrq.Type);
 		goto EXIT;
 	}
@@ -6211,7 +6212,7 @@ static ssize_t ISP_RegDebug(struct file *pFile,
 			   const char __user *pBuffer, size_t  Count, loff_t *p_off)
 {
 	LOG_ERR("ISP_RegDebug: Not implement");
-	return 0;
+	return -EPERM;
 }
 
 static ssize_t CAMIO_DumpRegToProc(struct file *pPage,
@@ -6228,7 +6229,7 @@ static ssize_t CAMIO_RegDebug(struct file *pFile,
 			     const char __user*pBuffer, size_t Count, loff_t *p_off)
 {
 	LOG_ERR("CAMIO_RegDebug: Not implement");
-	return 0;
+	return -EPERM;
 }
 
 /*******************************************************************************

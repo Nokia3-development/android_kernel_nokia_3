@@ -35,12 +35,24 @@ static int debug_enable_vib_hal = 1;
 
 void vibr_Enable_HW(void)
 {
-	pmic_set_register_value(PMIC_RG_VIBR_EN, 1);	/* [bit 1]: VIBR_EN,  1=enable */
+	unsigned int ret = 0;
+
+	ret = pmic_set_register_value(PMIC_RG_VIBR_EN, 1);	/* [bit 1]: VIBR_EN,  1=enable */
+	if (ret != 0)
+	{
+		BBOX_HAPTIC_WRITE_REGISTER_FAIL
+	}
 }
 
 void vibr_Disable_HW(void)
 {
-	pmic_set_register_value(PMIC_RG_VIBR_EN, 0);	/* [bit 1]: VIBR_EN,  1=enable */
+	unsigned int ret = 0;
+
+	ret = pmic_set_register_value(PMIC_RG_VIBR_EN, 0);	/* [bit 1]: VIBR_EN,  1=enable */
+	if ( ret != 0)
+	{
+		BBOX_HAPTIC_WRITE_REGISTER_FAIL
+	}
 }
 
 /******************************************
@@ -119,10 +131,15 @@ struct vibrator_hw *get_cust_vibrator_dtsi(void)
 void vibr_power_set(void)
 {
 #ifdef CUST_VIBR_VOL
+	unsigned int ret = 0;
 	struct vibrator_hw *hw = get_cust_vibrator_dtsi();
 
 	VIB_DEBUG("vibr_init: vibrator set voltage = %d\n", hw->vib_vol);
-	pmic_set_register_value(PMIC_RG_VIBR_VOSEL, hw->vib_vol);
+	ret = pmic_set_register_value(PMIC_RG_VIBR_VOSEL, hw->vib_vol);
+	if ( ret != 0)
+	{
+		BBOX_HAPTIC_SET_REGULATOR_FAIL
+	}
 #endif
 }
 

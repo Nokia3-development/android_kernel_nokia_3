@@ -127,6 +127,7 @@ struct bmg_i2c_data {
 	struct data_filter	fir;
 #endif
 
+	// 
 	bool flush;
 };
 
@@ -253,6 +254,7 @@ static int bmg_i2c_read_block(struct i2c_client *client, u8 addr,
 	err = i2c_transfer(client->adapter, msgs, sizeof(msgs)/sizeof(msgs[0]));
 	 mutex_unlock(&bmg160_i2c_mutex);
 	if (err != 2) {
+		printk("BBox::UEC;8::9\n");
 		GYRO_PR_ERR("i2c_transfer error: (%d %p %d) %d\n",
 			addr, data, len, err);
 		err = -EIO;
@@ -333,6 +335,7 @@ static int bmg_read_raw_data(struct i2c_client *client, s16 data[BMG_AXES_NUM])
 		err = bmg_i2c_read_block(client, BMG160_RATE_X_LSB_ADDR,
 				buf_tmp, 6);
 		if (err) {
+			printk("BBox::UEC;8::66\n");
 			GYRO_PR_ERR("[%s]read raw data failed, err = %d\n",
 			priv->sensor_name, err);
 			return err;
@@ -639,8 +642,10 @@ static int bmg_get_chip_type(struct i2c_client *client)
 	/* twice */
 	err = bmg_i2c_read_block(client, BMG_CHIP_ID_REG, &chip_id, 0x01);
 	err = bmg_i2c_read_block(client, BMG_CHIP_ID_REG, &chip_id, 0x01);
-	if (err != 0)
+	if (err != 0) {
+		printk("BBox::UEC;8::67\n");
 		return err;
+	}
 
 	switch (chip_id) {
 	case BMG160_CHIP_ID:
@@ -789,6 +794,7 @@ static int bmg_set_opmode(struct i2c_client *client, enum BMG_POWERMODE_ENUM pow
 	else
 		obj->power_mode = power_mode;
 
+	// 
 	if (obj_i2c_data->flush)
 	{
 		if (obj->power_mode)
@@ -1072,7 +1078,7 @@ static int bmg_init_client(struct i2c_client *client, int reset_cali)
 		return err;
 	}
 
-	err = bmg_set_range(client, (enum BMG_RANGE_ENUM)BMG_RANGE_2000);
+	err = bmg_set_range(client, (enum BMG_RANGE_ENUM)BMG_RANGE_1000);
 	if (err < 0) {
 		GYRO_PR_ERR("set range failed, err = %d\n", err);
 		return err;
@@ -2135,6 +2141,7 @@ static int bmg160_gyro_get_data(int* x ,int* y,int* z, int* status)
 #endif
 
 
+// 
 static int bmg160_batch(int flag, int64_t samplingPeriodNs, int64_t maxBatchReportLatencyNs)
 {
 	return 0;
@@ -2338,6 +2345,7 @@ exit_hwmsen_get_convert_failed:
 	kfree(obj);
 
 exit:
+	printk("BBox::UEC;8::17\n");
 	GYRO_PR_ERR("err = %d\n", err);
 
 	return err;
@@ -2395,7 +2403,7 @@ static int __init bmg_init(void)
 {
 	const char *name = "mediatek,bmg160";
 
-	hw = f_get_gyro_dts_func(name, hw);
+	hw = fih_get_gyro_dts_func(name, hw);
 
 	GYRO_LOG("%s: bosch gyroscope driver version: %s\n", __func__, BMG_DRIVER_VERSION);
 

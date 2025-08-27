@@ -59,10 +59,24 @@
 #include <linux/regulator/consumer.h>
 #endif /* !defined(CONFIG_MTK_LEGACY) */
 
+// add for BBS log++
+#define FIHBBS
+#ifdef FIHBBS
+#include "fihBBS/fih_camera_bbs.h"
+extern void fih_bbs_camera_msg_by_addr(int, int);
+int g_SensorFound =0;
+#endif
+// add for BBS log--
 /* Camera information */
 #define PROC_CAMERA_INFO "driver/camera_info"
 #define camera_info_size 128
 #define PDAF_DATA_SIZE 4096
+//
+//#if !defined(CONFIG_FIH_PROJECT_NE1)
+#ifndef CONFIG_FIH_PROJECT_NE1
+#define BYTE unsigned char
+extern BYTE get_otp_module_id(BYTE zone);
+#endif
 char mtk_ccm_name[camera_info_size] = { 0 };
 #define FEATURE_CONTROL_MAX_DATA_SIZE 128000
 
@@ -383,6 +397,16 @@ int iReadReg(u16 a_u2Addr, u8 *a_puBuff, u16 i2cId)
 int iReadRegI2C(u8 *a_pSendData , u16 a_sizeSendData, u8 *a_pRecvData, u16 a_sizeRecvData, u16 i2cId)
 {
 	int i4RetValue = 0;
+/*
+//test tmp
+// add for BBS log++
+			#ifdef FIHBBS
+			PK_ERR("[MIMI CAMERA SENSOR]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+			fih_bbs_camera_msg_by_addr(i2cId, FIH_BBS_CAMERA_ERRORCODE_I2C_READ);
+			#endif
+			// add for BBS log--
+//test tmp
+*/
 
 	if (gI2CBusNum == SUPPORT_I2C_BUS_NUM1) {
 		spin_lock(&kdsensor_drv_lock);
@@ -401,12 +425,32 @@ int iReadRegI2C(u8 *a_pSendData , u16 a_sizeSendData, u8 *a_pRecvData, u16 a_siz
 		i4RetValue = i2c_master_send(g_pstI2Cclient, a_pSendData, a_sizeSendData);
 		if (i4RetValue != a_sizeSendData) {
 			PK_ERR("[CAMERA SENSOR] I2C send failed!!, Addr = 0x%x\n", a_pSendData[0]);
+			// add for BBS log++
+			#ifdef FIHBBS
+			if(!g_IsSearchSensor){
+				if(!g_SensorFound){
+					PK_ERR("[CAMERA SENSOR]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+					fih_bbs_camera_msg_by_addr(i2cId, FIH_BBS_CAMERA_ERRORCODE_I2C_WRITE);
+				}
+			}
+			#endif
+			// add for BBS log--
 			return -1;
 		}
 
 		i4RetValue = i2c_master_recv(g_pstI2Cclient, (char *)a_pRecvData, a_sizeRecvData);
 		if (i4RetValue != a_sizeRecvData) {
 			PK_ERR("[CAMERA SENSOR] I2C read failed!!\n");
+			// add for BBS log++
+			#ifdef FIHBBS
+			if(!g_IsSearchSensor){
+				if(!g_SensorFound){
+					PK_ERR("[CAMERA SENSOR]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+					fih_bbs_camera_msg_by_addr(i2cId, FIH_BBS_CAMERA_ERRORCODE_I2C_READ);
+				}
+			}
+			#endif
+			// add for BBS log--
 			return -1;
 		}
 	} else {
@@ -424,12 +468,32 @@ int iReadRegI2C(u8 *a_pSendData , u16 a_sizeSendData, u8 *a_pRecvData, u16 a_siz
 		i4RetValue = i2c_master_send(g_pstI2Cclient2, a_pSendData, a_sizeSendData);
 		if (i4RetValue != a_sizeSendData) {
 			PK_ERR("[CAMERA SENSOR] I2C send failed!!, Addr = 0x%x\n", a_pSendData[0]);
+			// add for BBS log++
+			#ifdef FIHBBS
+			if(!g_IsSearchSensor){
+				if(!g_SensorFound){
+					PK_ERR("[CAMERA SENSOR]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+					fih_bbs_camera_msg_by_addr(i2cId, FIH_BBS_CAMERA_ERRORCODE_I2C_WRITE);
+				}
+			}
+			#endif
+			// add for BBS log--
 			return -1;
 		}
 
 		i4RetValue = i2c_master_recv(g_pstI2Cclient2, (char *)a_pRecvData, a_sizeRecvData);
 		if (i4RetValue != a_sizeRecvData) {
 			PK_ERR("[CAMERA SENSOR] I2C read failed!!\n");
+			// add for BBS log++
+			#ifdef FIHBBS
+			if(!g_IsSearchSensor){
+				if(!g_SensorFound){
+					PK_ERR("[CAMERA SENSOR]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+					fih_bbs_camera_msg_by_addr(i2cId, FIH_BBS_CAMERA_ERRORCODE_I2C_READ);
+				}
+			}
+			#endif
+			// add for BBS log--
 			return -1;
 		}
 	}
@@ -498,7 +562,7 @@ int iWriteReg(u16 a_u2Addr, u32 a_u4Data, u32 a_u4Bytes, u16 i2cId)
 	return 0;
 }
 
-/* add for i2c err**/
+/** add for i2c err**/
 int iWriteReg_otp(u16 a_u2Addr, u32 a_u4Data, u32 a_u4Bytes, u16 i2cId, char * sensorname )
 {
 	int i4RetValue = 0;
@@ -512,11 +576,13 @@ int iWriteReg_otp(u16 a_u2Addr, u32 a_u4Data, u32 a_u4Bytes, u16 i2cId, char * s
 	};
 
 	/* PK_DBG("Addr : 0x%x,Val : 0x%x\n",a_u2Addr,a_u4Data); */
+    //PK_ERR("yujinyun %s\n", sensorname);
 	/* KD_IMGSENSOR_PROFILE_INIT(); */
 	spin_lock(&kdsensor_drv_lock);
 
 	if (gI2CBusNum == SUPPORT_I2C_BUS_NUM1)
 	{
+		//PK_ERR("yujinyun yujinyun hhhhhhhhhh \n");
         if( !strcmp (sensorname ,"S5K4H8JKSUB") || !strcmp (sensorname ,"S5K4H8SUB"))
 		{
 			//PK_ERR("this is mian camera \n");
@@ -773,7 +839,16 @@ int iWriteRegI2C(u8 *a_pSendData, u16 a_sizeSendData, u16 i2cId)
 {
 	int i4RetValue = 0;
 	int retry = 3;
-
+/*
+//test tmp
+// add for BBS log++
+			#ifdef FIHBBS
+			PK_ERR("[MIMI CAMERA SENSOR]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+			fih_bbs_camera_msg_by_addr(i2cId, FIH_BBS_CAMERA_ERRORCODE_I2C_WRITE);
+			#endif
+			// add for BBS log--
+//test tmp
+*/
 /* PK_DBG("Addr : 0x%x,Val : 0x%x\n",a_u2Addr,a_u4Data); */
 
 	/* KD_IMGSENSOR_PROFILE_INIT(); */
@@ -796,7 +871,17 @@ int iWriteRegI2C(u8 *a_pSendData, u16 a_sizeSendData, u16 i2cId)
 		}
 		if (i4RetValue != a_sizeSendData) {
 			PK_DBG("[CAMERA SENSOR] I2C send failed!!, Addr = 0x%x, Data = 0x%x\n",
-			       a_pSendData[0], a_pSendData[1]);
+			a_pSendData[0], a_pSendData[1]);
+			// add for BBS log++
+			#ifdef FIHBBS
+			if(!g_IsSearchSensor){
+				if(!g_SensorFound){
+					PK_ERR("[CAMERA SENSOR]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+					fih_bbs_camera_msg_by_addr(i2cId, FIH_BBS_CAMERA_ERRORCODE_I2C_WRITE);
+				}
+			}
+			#endif
+			// add for BBS log--
 		} else {
 			break;
 		}
@@ -1528,11 +1613,20 @@ static inline int adopt_CAMERA_HW_CheckIsAlive(void)
 	UINT32 i = 0;
 	MUINT32 sensorID = 0;
 	MUINT32 retLen = 0;
+//
+        MINT32 ret = ERROR_NONE;
+//#if !defined(CONFIG_FIH_PROJECT_NE1)
+#ifndef CONFIG_FIH_PROJECT_NE1
+        BYTE my_module_id;
+	char* module_name;
+#endif
 
 	KD_IMGSENSOR_PROFILE_INIT();
 	/* power on sensor */
-	kdModulePowerOn((CAMERA_DUAL_CAMERA_SENSOR_ENUM *) g_invokeSocketIdx, g_invokeSensorNameStr,
+	ret = kdModulePowerOn((CAMERA_DUAL_CAMERA_SENSOR_ENUM *) g_invokeSocketIdx, g_invokeSensorNameStr,
 			true, CAMERA_HW_DRVNAME1);
+	if(ret < 0)
+		return -EIO;
 	/* wait for power stable */
 	mDELAY(10);
 	KD_IMGSENSOR_PROFILE("kdModulePowerOn");
@@ -1542,9 +1636,17 @@ static inline int adopt_CAMERA_HW_CheckIsAlive(void)
 	/* Search sensor keep i2c debug log */
 	g_IsSearchSensor = 1;
 	/* Camera information */
+//
+#ifdef CONFIG_FIH_PROJECT_NE1
 	if (gDrvIndex == 0x10000) {
 		memset(mtk_ccm_name, 0, camera_info_size);
 	}
+#else
+       
+	if (gDrvIndex == 0x20000) {
+		memset(mtk_ccm_name, 0, camera_info_size);
+	}
+#endif
 
 	if (g_pSensorFunc) {
 		for (i = KDIMGSENSOR_INVOKE_DRIVER_0; i < KDIMGSENSOR_MAX_INVOKE_DRIVERS; i++) {
@@ -1555,18 +1657,42 @@ static inline int adopt_CAMERA_HW_CheckIsAlive(void)
 									(MUINT8 *) &sensorID,
 									&retLen);
 				if (sensorID == 0) {	/* not implement this feature ID */
-					PK_DBG
-					    (" Not implement!!, use old open function to check\n");
+					PK_DBG(" Not implement!!, use old open function to check\n");
 					err = ERROR_SENSOR_CONNECT_FAIL;
 				} else if (sensorID == 0xFFFFFFFF) {	/* fail to open the sensor */
 					PK_DBG(" No Sensor Found");
-					err = ERROR_SENSOR_CONNECT_FAIL;
+                                        err = ERROR_SENSOR_CONNECT_FAIL;
 				} else {
-
-					PK_DBG(" Sensor found ID = 0x%x\n", sensorID);
-					snprintf(mtk_ccm_name + strlen(mtk_ccm_name),
-						 sizeof(mtk_ccm_name) - strlen(mtk_ccm_name),
-						 " CAM[%d]:%s;", g_invokeSocketIdx[i], g_invokeSensorNameStr[i]);
+					//
+					#ifdef CONFIG_FIH_PROJECT_NE1
+						printk("[MIMI]1 Sensor found ID = 0x%x\n", sensorID);
+						// add for BBS log++
+						#ifdef FIHBBS
+							g_SensorFound =1;
+						#endif
+						// add for BBS log--
+						snprintf(mtk_ccm_name + strlen(mtk_ccm_name),
+							sizeof(mtk_ccm_name) - strlen(mtk_ccm_name),
+							" CAM[%d]:%s;", g_invokeSocketIdx[i], g_invokeSensorNameStr[i]);
+					#else
+						printk("[MIMI]2 Sensor found ID = 0x%x\n", sensorID);
+						// add for BBS log++
+						#ifdef FIHBBS
+							g_SensorFound =1;
+						#endif
+						// add for BBS log--
+						/* add module id to proc sys begin*/
+						my_module_id = get_otp_module_id(0x04);
+						if(my_module_id == 0x01) {
+							module_name = "FoxLink";
+						} else {
+							module_name = "KingCom";
+						}
+						/* add module id to proc sys end */
+						snprintf(mtk_ccm_name + strlen(mtk_ccm_name),
+							sizeof(mtk_ccm_name) - strlen(mtk_ccm_name),
+							" CAM[%d]:%s, Module:%s;", g_invokeSocketIdx[i], g_invokeSensorNameStr[i],module_name);
+					#endif
 					err = ERROR_NONE;
 				}
 				if (ERROR_NONE != err) {
@@ -1707,22 +1833,24 @@ MSDK_SENSOR_INFO_STRUCT ginfo1[2];
 MSDK_SENSOR_INFO_STRUCT ginfo2[2];
 MSDK_SENSOR_INFO_STRUCT ginfo3[2];
 MSDK_SENSOR_INFO_STRUCT ginfo4[2];
+MSDK_SENSOR_INFO_STRUCT *pInfo[2];
+MSDK_SENSOR_CONFIG_STRUCT config[2], *pConfig[2];
+MSDK_SENSOR_INFO_STRUCT *pInfo1[2];
+MSDK_SENSOR_CONFIG_STRUCT config1[2], *pConfig1[2];
+MSDK_SENSOR_INFO_STRUCT *pInfo2[2];
+MSDK_SENSOR_CONFIG_STRUCT config2[2], *pConfig2[2];
+MSDK_SENSOR_INFO_STRUCT *pInfo3[2];
+MSDK_SENSOR_CONFIG_STRUCT config3[2], *pConfig3[2];
+MSDK_SENSOR_INFO_STRUCT *pInfo4[2];
+MSDK_SENSOR_CONFIG_STRUCT config4[2], *pConfig4[2];
+
 /* adopt_CAMERA_HW_GetInfo() */
 inline static int adopt_CAMERA_HW_GetInfo2(void *pBuf)
 {
 	IMAGESENSOR_GETINFO_STRUCT *pSensorGetInfo = (IMAGESENSOR_GETINFO_STRUCT *) pBuf;
 	ACDK_SENSOR_INFO2_STRUCT SensorInfo = { 0 };
 	MUINT32 IDNum = 0;
-	MSDK_SENSOR_INFO_STRUCT *pInfo[2];
-	MSDK_SENSOR_CONFIG_STRUCT config[2], *pConfig[2];
-	MSDK_SENSOR_INFO_STRUCT *pInfo1[2];
-	MSDK_SENSOR_CONFIG_STRUCT config1[2], *pConfig1[2];
-	MSDK_SENSOR_INFO_STRUCT *pInfo2[2];
-	MSDK_SENSOR_CONFIG_STRUCT config2[2], *pConfig2[2];
-	MSDK_SENSOR_INFO_STRUCT *pInfo3[2];
-	MSDK_SENSOR_CONFIG_STRUCT config3[2], *pConfig3[2];
-	MSDK_SENSOR_INFO_STRUCT *pInfo4[2];
-	MSDK_SENSOR_CONFIG_STRUCT config4[2], *pConfig4[2];
+
 	MSDK_SENSOR_RESOLUTION_INFO_STRUCT SensorResolution[2], *psensorResolution[2];
 
 	MUINT32 ScenarioId[2], *pScenarioId[2];
@@ -2113,6 +2241,7 @@ static inline int  adopt_CAMERA_HW_FeatureControl(void *pBuf)
 		if (copy_from_user
 		    ((void *)pFeaturePara, (void *)pFeatureCtrl->pFeaturePara, FeatureParaLen)) {
 			PK_DBG("[CAMERA_HW][pFeaturePara] ioctl copy from user failed\n");
+			kfree(pFeaturePara);
 			return -EFAULT;
 		}
 		/* keep the information to wait Vsync synchronize */
@@ -2958,7 +3087,7 @@ bool Get_Cam_Regulator(void)
 				sensor_device->of_node =
 				    of_find_compatible_node(NULL, NULL,
 							    "mediatek,camera_hw");
-				/* ?Y?A?ݭnsub?]?w?q???ܡA?ݭn?ۤv?[?W
+				/* If you also need define the sub, you should add it by yourself.
 				   if (regVCAMA == NULL) {
 				   regVCAMA_SUB = regulator_get(sensor_device, "SUB_CAMERA_POWER_A");
 				   }

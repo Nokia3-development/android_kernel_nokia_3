@@ -31,13 +31,21 @@ static int tboost_freq;
 #define UI_UPDATE_DURATION_MS 300UL
 #define RENDER_AWARE_DURATION_MS 3000UL
 
+unsigned long perfctl_copy_from_user(void *pvTo, const void __user *pvFrom, unsigned long ulBytes)
+{
+	if (access_ok(VERIFY_READ, pvFrom, ulBytes))
+		return __copy_from_user(pvTo, pvFrom, ulBytes);
+
+	return ulBytes;
+}
+
 /*--------------------TIMER------------------------*/
 static void enable_ui_update_timer(void)
 {
 	ktime_t ktime;
 
 	ktime = ktime_set(0, (unsigned long)(NSEC_PER_MSEC * UI_UPDATE_DURATION_MS));
-	hrtimer_start(&hrt1, ktime, HRTIMER_MODE_REL);
+	hrtimer_start(&hrt, ktime, HRTIMER_MODE_REL);
 }
 
 static enum hrtimer_restart mt_ui_update_timeout(struct hrtimer *timer)
@@ -93,8 +101,8 @@ static void notify_touch(int action)
 static void notify_ui_update_timeout(void)
 {
 	mutex_lock(&notify_lock);
-
-	render_aware_valid = 0;
+	if (!is_touch_boost)
+		render_aware_valid = 0;
 	is_render_aware_boost = 0;
 	pr_debug(TAG"enable UI boost, frame noupdate, is_render_aware_boost:%d\n", is_render_aware_boost);
 	perfmgr_boost(is_render_aware_boost | is_touch_boost, tboost_core, tboost_freq);
@@ -179,21 +187,30 @@ long device_ioctl(struct file *filp,
 		unsigned int cmd, unsigned long arg)
 {
 	ssize_t ret = 0;
+	struct _FPSGO_PACKAGE *msgKM = NULL, *msgUM = (struct _FPSGO_PACKAGE *)arg;
+	struct _FPSGO_PACKAGE smsgKM;
+
+	msgKM = &smsgKM;
 
 	mutex_lock(&notify_lock);
+	if (perfctl_copy_from_user(msgKM, msgUM, sizeof(struct _FPSGO_PACKAGE))) {
+		ret = -EFAULT;
+		goto ret_ioctl;
+	}
+
 	if (fbc_debug)
 		goto ret_ioctl;
 
 	/* start of ux fbc */
 	switch (cmd) {
 	/*receive touch info*/
-	case IOCTL_WRITE_TH:
-		notify_touch(arg);
+	case FPSGO_TOUCH:
+		notify_touch(msgKM->frame_time);
 		break;
 
 	/*receive frame_time info*/
-	case IOCTL_WRITE_FC:
-		notify_frame_complete(arg);
+	case FPSGO_FRAME_COMPLETE:
+		notify_frame_complete(msgKM->frame_time);
 		break;
 
 	default:

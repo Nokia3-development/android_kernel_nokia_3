@@ -962,11 +962,7 @@ static int mjc_probe(struct platform_device *pDev)
 	gulRegister = (unsigned long)of_iomap(node, 0);
 	gi4IrqID = irq_of_parse_and_map(node, 0);
 
-	ret = of_address_to_resource(node, 0, &res);
-	if (ret) {
-		MJCMSG("[ERROR] Can't get resouce from device node: %s\n", node->name);
-		return ret;
-	}
+	of_address_to_resource(node, 0, &res);
 	gu1PaReg = res.start;
 	gu1PaSize = resource_size(&res);
 

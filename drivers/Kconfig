@@ -184,4 +184,20 @@ source "drivers/ras/Kconfig"
 
 source "drivers/thunderbolt/Kconfig"
 
+source "drivers/fih/Kconfig"
+
+menuconfig FIH_PROJECT_NE1
+
+            bool "FIH_PROJECT_NE1"
+            default n
+            help
+                Enable the support for FIH_PROJECT_NE1 flag
+
+menuconfig FIH_PROJECT_FRT
+
+            bool "FIH_PROJECT_FRT"
+            default n
+            help
+                Enable the support for FIH_PROJECT_FRT flag
+
 endmenu

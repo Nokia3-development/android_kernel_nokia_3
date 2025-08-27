@@ -100,10 +100,7 @@ READ_START:
 	/* 1. get incoming request */
 	if (skb_queue_empty(&port->rx_skb_list)) {
 		if (!(file->f_flags & O_NONBLOCK)) {
-			spin_lock_irq(&port->rx_wq.lock);
-			ret = wait_event_interruptible_locked_irq(port->rx_wq,
-				!skb_queue_empty(&port->rx_skb_list));
-			spin_unlock_irq(&port->rx_wq.lock);
+			ret = wait_event_interruptible(port->rx_wq, !skb_queue_empty(&port->rx_skb_list));
 			if (ret == -ERESTARTSYS) {
 				ret = -EINTR;
 				goto exit;

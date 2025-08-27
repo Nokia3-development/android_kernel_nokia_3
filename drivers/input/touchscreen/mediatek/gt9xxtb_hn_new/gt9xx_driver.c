@@ -1230,7 +1230,7 @@ s32 gtp_read_version(struct i2c_client *client, u16 *version)
 	if (version)
 		*version = (buf[5] << 8) | buf[4];
 
-	tpd_info.vid = *version;
+	tpd_info.vid = (buf[5] << 8) | buf[4];
 	tpd_info.pid = 0x00;
 
 	for (i = 0; i < 4; i++) {
@@ -2963,6 +2963,7 @@ static s8 gtp_enter_sleep(struct i2c_client *client)
 		ret = gtp_i2c_write(client, i2c_buf, 3);
 		if (ret > 0) {
 			GTP_INFO("GTP enter sleep!");
+			mutex_unlock(&gtp_suspend);
 			return ret;
 		}
 		msleep(20);

@@ -292,6 +292,8 @@ BMM150_RETURN_FUNCTION_TYPE bmm150api_read_mdataXYZ(
 	    /* Output raw resistance value */
 	    mdata->resistance = raw_dataXYZ.raw_dataR;
 	}
+	if ( comres != 0 )
+		printk("BBox::UEC;8::69\n");
 	return comres;
 }
 
@@ -358,6 +360,8 @@ BMM150_RETURN_FUNCTION_TYPE bmm150api_read_mdataXYZ_s32(
 	    /* Output raw resistance value */
 	    mdata->resistance = raw_dataXYZ.raw_dataR;
 	}
+	if ( comres != 0 )
+		printk("BBox::UEC;8::69\n");
 	return comres;
 }
 
@@ -428,6 +432,8 @@ BMM150_RETURN_FUNCTION_TYPE bmm150api_read_mdataXYZ_float(
 	    /* Output raw resistance value */
 	    mdata->resistance = raw_dataXYZ.raw_dataR;
 	}
+	if ( comres != 0 )
+		printk("BBox::UEC;8::69\n");
 	return comres;
 }
 #endif
@@ -2076,9 +2082,11 @@ static int bmm150_wakeup(struct i2c_client *client)
 			err = i2c_master_send(client, data, 2);
 			count++;
 			udelay(BMM_I2C_WRITE_DELAY_TIME * 1000);
-	}
+		}
 		dummy = 0;
-		err += hwmsen_read_block(client, BMM150_POWER_CNTL, &dummy, 1);
+		err = hwmsen_read_block(client, BMM150_POWER_CNTL, &dummy, 1);
+		if (err != 0)
+			printk("BBox::UEC;8::18\n");
 		if (data[1] == dummy)
 			break;
 		try_times--;
@@ -2096,8 +2104,11 @@ static int bmm150_wakeup(struct i2c_client *client)
 static int bmm150_checkchipid(struct i2c_client *client)
 {
 	u8 chip_id = 0;
+	int err = 0;
 
-	hwmsen_read_block(client, BMM150_CHIP_ID, &chip_id, 1);
+	err = hwmsen_read_block(client, BMM150_CHIP_ID, &chip_id, 1);
+	if (err != 0)
+		printk("BBox::UEC;8::18\n");
 	MSE_LOG("read chip id result: %#x", chip_id);
 
 	if ((chip_id & 0xff) != SENSOR_CHIP_ID_BMM)
@@ -2108,7 +2119,11 @@ static int bmm150_checkchipid(struct i2c_client *client)
 /*----------------------------------------------------------------------------*/
 static char bmm150_i2c_read_wrapper(u8 dev_addr, u8 reg_addr, u8 *data, u8 len)
 {
-	return hwmsen_read_block(this_client, reg_addr, data, len);
+	int err = 0;
+	err = hwmsen_read_block(this_client, reg_addr, data, len);
+	if (err != 0)
+		printk("BBox::UEC;8::18\n");
+	return err;
 }
 /*----------------------------------------------------------------------------*/
 static char bmm150_i2c_write_wrapper(u8 dev_addr, u8 reg_addr, u8 *data, u8 len)
@@ -2141,8 +2156,10 @@ static int bmm150_init_client(struct i2c_client *client)
 	if (res < 0)
 		return res;
 	res = bmm150_checkchipid(client);
-	if (res < 0)
+	if (res < 0) {
+		printk("BBox::UEC;8::70\n");
 		return res;
+	}
 	MSE_LOG("check chip ID ok");
 
 	/*bmm150 api init*/
@@ -2431,6 +2448,7 @@ exit_kfree:
 
 exit:
 	bmm150_init_flag = -1;
+	printk("BBox::UEC;8::26\n");
 	MSE_ERR("%s: err = %d\n", __func__, err);
 	return err;
 }
@@ -2522,7 +2540,7 @@ static int __init bmm150_init(void)
 	MSE_FUN();
 
 	//hw = get_mag_dts_func(name, hw);
-	hw = f_get_mag_dts_func(name, hw);
+	hw = fih_get_mag_dts_func(name, hw);
 
 	//i2c_register_board_info(hw->i2c_num, &bmm150_i2c_info, 1);
 

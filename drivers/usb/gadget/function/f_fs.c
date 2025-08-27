@@ -661,7 +661,9 @@ static void ffs_user_copy_worker(struct work_struct *work)
 	if (io_data->read && ret > 0) {
 		int i;
 		size_t pos = 0;
+		mm_segment_t oldfs = get_fs();
 
+		set_fs(USER_DS);
 		/*
 		 * Since req->length may be bigger than io_data->len (after
 		 * being rounded up to maxpacketsize), we may end up with more
@@ -683,6 +685,7 @@ static void ffs_user_copy_worker(struct work_struct *work)
 			pos += len;
 		}
 		unuse_mm(io_data->mm);
+		set_fs(oldfs);
 	}
 
 	aio_complete(io_data->kiocb, ret, ret);
@@ -711,7 +714,7 @@ static ssize_t ffs_epfile_io(struct file *file, struct ffs_io_data *io_data)
 	struct ffs_epfile *epfile = file->private_data;
 	struct ffs_ep *ep;
 	char *data = NULL;
-	ssize_t ret, data_len = -EINVAL;
+	ssize_t ret, data_len = -EINVAL, original_len = -EINVAL;
 	int halt;
 
 	pr_debug("%s: len %lld, read %d\n", __func__, (u64)io_data->len, io_data->read);
@@ -773,7 +776,6 @@ static ssize_t ffs_epfile_io(struct file *file, struct ffs_io_data *io_data)
 		 * if we _do_ wait above, the epfile->ffs->gadget might be NULL
 		 * before the waiting completes, so do not assign to 'gadget' earlier
 		 */
-		struct usb_gadget *gadget = epfile->ffs->gadget;
 
 		spin_lock_irq(&epfile->ffs->eps_lock);
 		/* In the meantime, endpoint got disabled or changed. */
@@ -785,9 +787,9 @@ static ssize_t ffs_epfile_io(struct file *file, struct ffs_io_data *io_data)
 		 * Controller may require buffer size to be aligned to
 		 * maxpacketsize of an out endpoint.
 		 */
-		data_len = io_data->read ?
-			   usb_ep_align_maybe(gadget, ep->ep, io_data->len) :
-			   io_data->len;
+		original_len = data_len = io_data->len;
+		if (io_data->read)
+			data_len = round_up(data_len, (size_t)ep->ep->desc->wMaxPacketSize);
 		spin_unlock_irq(&epfile->ffs->eps_lock);
 
 #if defined(CONFIG_64BIT) && defined(CONFIG_MTK_LM_MODE)
@@ -858,7 +860,7 @@ static ssize_t ffs_epfile_io(struct file *file, struct ffs_io_data *io_data)
 		}
 
 		if (io_data->aio) {
-			req = usb_ep_alloc_request(ep->ep, GFP_KERNEL);
+			req = usb_ep_alloc_request(ep->ep, GFP_ATOMIC);
 			if (unlikely(!req))
 				goto error_lock;
 
@@ -940,6 +942,10 @@ static ssize_t ffs_epfile_io(struct file *file, struct ffs_io_data *io_data)
 				spin_unlock_irq(&epfile->ffs->eps_lock);
 
 				if (io_data->read && ret > 0) {
+					if (unlikely(ret > original_len))
+						pr_err("%s(), ret<%d>, original_len<%d>\n",
+								__func__, (int)ret, (int)original_len);
+
 					ret = min_t(size_t, ret, io_data->len);
 
 					if (unlikely(copy_to_user(io_data->buf,
@@ -2830,10 +2836,8 @@ static int _ffs_func_bind(struct usb_configuration *c,
 	struct ffs_data *ffs = func->ffs;
 
 	const int full = !!func->ffs->fs_descs_count;
-	const int high = gadget_is_dualspeed(func->gadget) &&
-		func->ffs->hs_descs_count;
-	const int super = gadget_is_superspeed(func->gadget) &&
-		func->ffs->ss_descs_count;
+	const int high = !!func->ffs->hs_descs_count;
+	const int super = !!func->ffs->ss_descs_count;
 
 	int fs_len, hs_len, ss_len, ret, i;
 
@@ -3098,7 +3102,7 @@ static int ffs_func_setup(struct usb_function *f,
 	__ffs_event_add(ffs, FUNCTIONFS_SETUP);
 	spin_unlock_irqrestore(&ffs->ev.waitq.lock, flags);
 
-	return 0;
+	return creq->wLength == 0 ? USB_GADGET_DELAYED_STATUS : 0;
 }
 
 static void ffs_func_suspend(struct usb_function *f)
@@ -3548,7 +3552,8 @@ static void ffs_closed(struct ffs_data *ffs)
 	ci = opts->func_inst.group.cg_item.ci_parent->ci_parent;
 	ffs_dev_unlock();
 
-	unregister_gadget_item(ci);
+	if (test_bit(FFS_FL_BOUND, &ffs->flags))
+		unregister_gadget_item(ci);
 	return;
 done:
 	ffs_dev_unlock();

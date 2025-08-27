@@ -1490,6 +1490,8 @@ struct sock *sk_clone_lock(const struct sock *sk, const gfp_t priority)
 
 		sock_copy(newsk, sk);
 
+		newsk->sk_prot_creator = sk->sk_prot;
+
 		/* SANITY */
 		get_net(sock_net(newsk));
 		sk_node_init(&newsk->sk_node);
@@ -1889,7 +1891,7 @@ struct sk_buff *sock_alloc_send_pskb(struct sock *sk, unsigned long header_len,
 		debug_block.process = current->comm;
 		debug_block.when = jiffies;
 		debug_block.sk = sk; /*Mark sk info*/
-		init_timer(&debug_timer);
+		init_timer_on_stack(&debug_timer);
 		debug_timer.function = print_block_sock_info;
 		debug_timer.expires = jiffies + 10*HZ;
 		debug_timer.data = (unsigned long)&debug_block;
@@ -1901,6 +1903,7 @@ struct sk_buff *sock_alloc_send_pskb(struct sock *sk, unsigned long header_len,
 #ifdef CONFIG_MTK_NET_LOGGING
 	if (sk->sk_family == AF_UNIX) {
 		del_timer(&debug_timer);
+		destroy_timer_on_stack(&debug_timer);
 		delay_time = jiffies - debug_block.when;
 		do_div(delay_time, HZ);
 		if (delay_time > 5) {

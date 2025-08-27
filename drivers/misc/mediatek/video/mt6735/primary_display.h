@@ -292,6 +292,7 @@ unsigned int primary_display_get_ticket(void);
 int primary_display_config_input(primary_disp_input_config *input);
 int primary_display_user_cmd(unsigned int cmd, unsigned long arg);
 int primary_display_trigger(int blocking, void *callback, unsigned int userdata);
+int primary_display_trigger_nolock(int blocking, void *callback, unsigned int userdata);
 int primary_display_ext_trigger(int blocking, void *callback, unsigned int userdata);
 void primary_display_trigger_and_merge(disp_session_config *config, int session_id);
 int primary_display_config_output(disp_mem_output_config *output, unsigned int session_id);
@@ -388,8 +389,6 @@ extern void disp_exit_idle_ex(const char *caller);
 
 
 int primary_display_set_secondary_display(int add, DISP_SESSION_TYPE type);
-int init_ext_decouple_buffers(void);
-int deinit_ext_decouple_buffers(void);
 
 int primary_display_get_session_mode(void);
 int display_freeze_mode(int enable, int need_lock);
@@ -397,3 +396,6 @@ int display_freeze_mode(int enable, int need_lock);
 int primary_display_disable_ovl2mem(void);
 #endif
 int primary_display_get_init_status(void);
+#ifdef CONFIG_MTK_ROUND_CORNER_SUPPORT
+size_t mtkfb_get_fb_size(void);
+#endif

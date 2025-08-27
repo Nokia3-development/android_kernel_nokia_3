@@ -78,6 +78,7 @@ config ARM64
 	select SPARSE_IRQ
 	select SYSCTL_EXCEPTION_TRACE
 	select HAVE_CONTEXT_TRACKING
+	select THREAD_INFO_IN_TASK
 	select DT_IDLE_STATES
 	help
 	  ARM 64-bit (AArch64) Linux support.
@@ -365,7 +366,6 @@ config ARCH_MT6757
 	select MTK_GIC_V3_EXT
 	select MTK_CPU_STRESS
 	select MTK_LM_MODE if !MTK_GMO_RAM_OPTIMIZE
-	select MTK_EIC_HISTORY_DUMP
 	select MTK_TIMER
 	help
 	  This enables support for MediaTek MT6757
@@ -401,7 +401,6 @@ config ARCH_MT6797
 	select MTK_GIC_V3_EXT
 	select MTK_CPU_STRESS
 	select MTK_LM_MODE if !MTK_GMO_RAM_OPTIMIZE
-	select MTK_EIC_HISTORY_DUMP
 	select MTK_USB2JTAG_SUPPORT
 	select MTK_IRQ_NEW_DESIGN
 	select MTK_IRQ_NEW_DESIGN_DEBUG
@@ -885,6 +884,18 @@ config FORCE_MAX_ZONEORDER
 	int
 	default "14" if (ARM64_64K_PAGES && TRANSPARENT_HUGEPAGE)
 	default "11"
+
+config UNMAP_KERNEL_AT_EL0
+	bool "Unmap kernel when running in userspace (aka \"KAISER\")" if EXPERT
+	default n
+	help
+	  Speculation attacks against some high-performance processors can
+	  be used to bypass MMU permission checks and leak kernel data to
+	  userspace. This can be defended against by unmapping the kernel
+	  when running in userspace, mapping it back in on exception entry
+	  via a trampoline page in the vector table.
+
+	  If unsure, say Y.
 
 menuconfig ARMV8_DEPRECATED
 	bool "Emulate deprecated/obsolete ARMv8 instructions"

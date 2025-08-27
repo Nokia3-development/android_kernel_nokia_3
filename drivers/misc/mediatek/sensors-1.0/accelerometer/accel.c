@@ -243,7 +243,8 @@ static int acc_enable_and_batch(void)
 		ACC_LOG("ACC power on done\n");
 	}
 	/* rate change */
-	if (cxt->power == 1 && cxt->delay_ns >= 0) {
+	//if (cxt->power == 1 && cxt->delay_ns >= 0) {
+	if (cxt->power == 1) {
 		ACC_LOG("ACC set batch\n");
 		/* set ODR, fifo timeout latency */
 		if (cxt->acc_ctl.is_support_batch)
@@ -383,13 +384,20 @@ static ssize_t acc_store_batch(struct device *dev, struct device_attribute *attr
 {
 	struct acc_context *cxt = acc_context_obj;
 	int handle = 0, flag = 0, err = 0;
-
+	int64_t delay_ns;
 	ACC_LOG(" acc_store_batch %s\n", buf);
 	err = sscanf(buf, "%d,%d,%lld,%lld", &handle, &flag,
-		&cxt->delay_ns, &cxt->latency_ns);
+		&delay_ns, &cxt->latency_ns);
+		//&cxt->delay_ns, &cxt->latency_ns);
 	if (err != 4) {
 		ACC_PR_ERR("acc_store_batch param error: err = %d\n", err);
 		return -1;
+	} else {
+		if (delay_ns > 0)
+			cxt->delay_ns = delay_ns;
+		else
+			cxt->delay_ns = 10000000;
+
 	}
 
 	mutex_lock(&acc_context_obj->acc_op_mutex);

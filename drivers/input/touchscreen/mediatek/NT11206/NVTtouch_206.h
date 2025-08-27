@@ -133,6 +133,11 @@ extern const uint16_t gesture_key_array[];
                                         printk("<<-NVT-DEBUG->> [%d]"fmt"\n",__LINE__, ##arg);\
 									}while(0)
 
+#define BBOX_TP_PROBE_FAILED do {printk("BBox::%s: BBOX_TP_PROBE_FAILED \n", __func__); printk("BBox::UEC;7::0\n");} while (0);
+#define BBOX_TP_I2C_READ_FAILED do {printk("BBox::%s: BBOX_TP_I2C_READ_FAILED \n", __func__); printk("BBox::UEC;7::1\n");} while (0);
+#define BBOX_TP_I2C_WRITE_FAILED do {printk("BBox::%s: BBOX_TP_I2C_WRITE_FAILED \n", __func__); printk("BBox::UEC;7::2\n");} while (0);
+#define BBOX_TP_FW_UPGRADE_FAILED do {printk("BBox::%s: BBOX_TP_FW_UPGRADE_FAILED \n", __func__); printk("BBox::UEC;7::6\n");} while (0);
+
 struct nvt_ts_data {
 	struct i2c_client *client;
 	struct input_dev *input_dev;

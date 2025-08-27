@@ -17,9 +17,11 @@
 #define AUXADC_SUPPORT_IMM_CURRENT_MODE
 #define BATTERY_DTS_SUPPORT
 
-// sometimes value of SOC is 50%.
-//#define BATTERY_CDP_WORKAROUND
+#if !defined(CONFIG_FIH_PROJECT_NE1)
+//Jason: sometimes value of SOC is 50%.
+#define BATTERY_CDP_WORKAROUND
 //end.50%.
+#endif
 
 #if !defined(MTK_PLUG_OUT_DETECTION)
 #define MTK_PLUG_OUT_DETECTION

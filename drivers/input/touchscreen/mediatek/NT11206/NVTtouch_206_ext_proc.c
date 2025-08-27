@@ -24,6 +24,7 @@
 
 #include "NVTtouch_206.h"
 
+#define TP_FW_VERSION "tp_fw_ver"
 #if NVT_TOUCH_EXT_PROC
 #define NVT_FW_VERSION "nvt_fw_version"
 #define NVT_BASELINE "nvt_baseline"
@@ -58,6 +59,7 @@ static uint8_t y_num = 0;
 static uint8_t button_num = 0;
 
 static struct proc_dir_entry *NVT_proc_fw_version_entry;
+static struct proc_dir_entry *NVT_proc_tp_fw_ver_entry;
 static struct proc_dir_entry *NVT_proc_baseline_entry;
 static struct proc_dir_entry *NVT_proc_raw_entry;
 static struct proc_dir_entry *NVT_proc_diff_entry;
@@ -315,6 +317,13 @@ static int32_t c_fw_version_show(struct seq_file *m, void *v)
 	seq_printf(m, "fw_ver=%d, x_num=%d, y_num=%d, button_num=%d\n", fw_ver, x_num, y_num, button_num);
 	return 0;
 }
+//add for fqc tp_fw_version
+static int32_t c_tp_fw_ver_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "fw_ver=%d\n", fw_ver);
+	return 0;
+}
+
 
 /*******************************************************
 Description:
@@ -397,6 +406,14 @@ const struct seq_operations nvt_fw_version_seq_ops = {
 	.show   = c_fw_version_show
 };
 
+//add for fqc tp_fw_version
+const struct seq_operations nvt_tp_fw_ver_seq_ops = {
+	.start  = c_start,
+	.next   = c_next,
+	.stop   = c_stop,
+	.show   = c_tp_fw_ver_show
+};
+
 const struct seq_operations nvt_seq_ops = {
 	.start  = c_start,
 	.next   = c_next,
@@ -418,9 +435,25 @@ static int32_t nvt_fw_version_open(struct inode *inode, struct file *file)
 	return seq_open(file, &nvt_fw_version_seq_ops);
 }
 
+//add for fqc tp_fw_version
+static int32_t nvt_tp_fw_ver_open(struct inode *inode, struct file *file)
+{
+	nvt_get_fw_info();
+	return seq_open(file, &nvt_tp_fw_ver_seq_ops);
+}
+
 static const struct file_operations nvt_fw_version_fops = {
 	.owner = THIS_MODULE,
 	.open = nvt_fw_version_open,
+	.read = seq_read,
+	.llseek = seq_lseek,
+	.release = seq_release,
+};
+
+//add for fqc tp_fw_version
+static const struct file_operations nvt_tp_fw_ver_fops = {
+	.owner = THIS_MODULE,
+	.open = nvt_tp_fw_ver_open,
 	.read = seq_read,
 	.llseek = seq_lseek,
 	.release = seq_release,
@@ -803,7 +836,7 @@ int32_t nvt_extra_proc_init(void)
 {
 #if FIH_E1_KeyTest_20170523
 	  //struct proc_dir_entry *for_FIH_parent;			
-	  proc_mkdir("AllHWList", NULL);	  
+	  //for_FIH_parent = proc_mkdir("AllHWList", NULL);	  
 	  //NVT_proc_keytest_entry = proc_create(NVT_KEYTEST, 0444, for_FIH_parent,&nvtc_keyTest_fops);
 	  NVT_proc_keytest_entry = proc_create("AllHWList/nvt_keyTest", 0444, NULL,&nvtc_keyTest_fops); //sunjie 2017.5.25
 	if (NVT_proc_keytest_entry == NULL) {
@@ -819,6 +852,15 @@ int32_t nvt_extra_proc_init(void)
 		return -ENOMEM;
 	} else {
 		dev_info(&ts->client->dev,"%s: create proc/nvt_fw_version Succeeded!\n", __func__);
+	}
+
+	//add for fqc tp_fw_version
+	NVT_proc_tp_fw_ver_entry = proc_create("AllHWList/tp_fw_ver", 0444, NULL,&nvt_tp_fw_ver_fops);
+	if (NVT_proc_tp_fw_ver_entry == NULL) {
+		dev_err(&ts->client->dev,"%s: create proc/AllHWList/tp_fw_ver Failed!\n", __func__);
+		return -ENOMEM;
+	} else {
+		dev_info(&ts->client->dev,"%s: create proc/AllHWList/tp_fw_ver Succeeded!\n", __func__);
 	}
 
 	NVT_proc_baseline_entry = proc_create(NVT_BASELINE, 0444, NULL,&nvt_baseline_fops);

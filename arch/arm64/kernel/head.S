@@ -406,7 +406,7 @@ __create_page_tables:
 	 * Map the kernel image (starting with PHYS_OFFSET).
 	 */
 	mov	x0, x26				// swapper_pg_dir
-	mov	x5, #PAGE_OFFSET
+	ldr	x5, =KIMAGE_VADDR
 	create_pgd_entry x0, x5, x3, x6
 	ldr	x6, =KERNEL_END			// __va(KERNEL_END)
 	mov	x3, x24				// phys offset
@@ -418,7 +418,7 @@ __create_page_tables:
 	 */
 	mov	x3, x21				// FDT phys address
 	and	x3, x3, #~((1 << 21) - 1)	// 2MB aligned
-	mov	x6, #PAGE_OFFSET
+	ldr	x6, =KIMAGE_VADDR
 	sub	x5, x3, x24			// subtract PHYS_OFFSET
 	tst	x5, #~((1 << 29) - 1)		// within 512MB?
 	csel	x21, xzr, x21, ne		// zero the FDT pointer
@@ -455,11 +455,17 @@ __mmap_switched:
 	sub	x2, x2, x0
 	bl	__pi_memset
 	dsb	ishst				// Make zero page visible to PTW
-
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+        adrp    x4, init_thread_union
+        add     sp, x4, #THREAD_SIZE
+        adr_l   x5, init_task
+        msr     sp_el0, x5                      // Save thread_info
+#else
 	adr_l	sp, initial_sp, x4
 	mov	x4, sp
 	and	x4, x4, #~(THREAD_SIZE - 1)
 	msr	sp_el0, x4			// Save thread_info
+#endif
 	str_l	x21, __fdt_pointer, x5		// Save FDT pointer
 	str_l	x24, memstart_addr, x6		// Save PHYS_OFFSET
 	mov	x29, #0
@@ -479,6 +485,7 @@ ENDPROC(__mmap_switched)
  * booted in EL1 or EL2 respectively.
  */
 ENTRY(el2_setup)
+	msr	SPsel, #1			// We want to use SP_EL{1,2}
 	mrs	x0, CurrentEL
 	cmp	x0, #CurrentEL_EL2
 	b.ne	1f
@@ -639,10 +646,18 @@ ENTRY(secondary_startup)
 ENDPROC(secondary_startup)
 
 ENTRY(__secondary_switched)
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+	adr_l	x0, secondary_data
+	ldr	x1, [x0, #CPU_BOOT_STACK]	// get secondary_data.stack
+	mov	sp, x1
+	ldr	x2, [x0, #CPU_BOOT_TASK]
+	msr	sp_el0, x2
+#else
 	ldr	x0, [x21]			// get secondary_data.stack
 	mov	sp, x0
 	and	x0, x0, #~(THREAD_SIZE - 1)
 	msr	sp_el0, x0			// save thread_info
+#endif
 	mov	x29, #0
 	b	secondary_start_kernel
 ENDPROC(__secondary_switched)

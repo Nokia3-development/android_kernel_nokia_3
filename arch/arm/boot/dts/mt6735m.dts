@@ -30,8 +30,9 @@
 
 	/* chosen */
 	chosen: chosen {
-			bootargs = "console=tty0 console=ttyMT0,921600n1 root=/dev/ram \
-			initrd=0x44000000,0x1000000 loglevel=8 androidboot.hardware=mt6735";
+		bootargs = "console=tty0 console=ttyMT3,921600n1 vmalloc=496M \
+androidboot.hardware=mt6735 slub_max_order=0 slub_debug=OFZPU \
+firmware_class.path=/vendor/firmware";
 	};
 
 	/* Do not put any bus before mtk-msdc, because it should be mtk-msdc.0 for partition device node usage */
@@ -74,6 +75,9 @@
 	compatible = "microtrust,utos";
 	interrupts = <GIC_SPI 252 IRQ_TYPE_EDGE_RISING>,
 		<GIC_SPI 253 IRQ_TYPE_EDGE_RISING>;
+	};
+	utos_tester {
+		compatible = "microtrust,tester-v1";
 	};
 
 	psci {
@@ -161,6 +165,15 @@
 						size = <0 0x100000>;
 						alignment = <0 0x200000>;
 				};
+
+#ifdef CONFIG_MICROTRUST_TEE_SUPPORT
+		soter-shared-mem {
+			compatible = "microtrust,shared_mem";
+			no-map;
+			size = <0 0x200000>;
+			alloc-ranges = <0 0x40000000 0 0x50000000>;
+		};
+#endif
 
 				spm-reserve-memory {
 					compatible = "mediatek,spm-reserve-memory";
@@ -661,10 +674,15 @@
 			reg = <0x10008000 0x1000>;
 			interrupts = <GIC_SPI 174 IRQ_TYPE_LEVEL_LOW>;
 		};
+		chr_stat: chr_stat {
+			compatible = "mediatek, chr_stat-eint";
+		};
+		gse_2: gse_2 {
+			compatible = "mediatek, gse_2-eint";
+		};
 		als: als {
 			compatible = "mediatek, als-eint";
 		};
-
 		gse_1: gse_1 {
 			compatible = "mediatek, gse_1-eint";
 			status = "disabled";
@@ -776,7 +794,55 @@
 
 		bat_comm: bat_comm {
 			compatible = "mediatek,battery";
+			/* cust_charging.h */
+			/* stop charging while in talking mode */
+			stop_charging_in_takling = <1 >;
+			talking_recharge_voltage = <3800 >;
+			talking_sync_time = <60 >;
+
+			/* Battery Temperature Protection */
+			mtk_temperature_recharge_support = <1 >;
+			max_charge_temperature = <60 >;
+			max_charge_temperature_minus_x_degree = <59 >;
+			min_charge_temperature = <0 >;
+			min_charge_temperature_plus_x_degree = <1 >;
+			err_charge_temperature = <0xff >;
+
+			/* Linear Charging Threshold */
+			v_pre2cc_thres = <3400 >;	/* unit: mV */
+			v_cc2topoff_thres = <4050 >;
+			recharging_voltage = <4110 >;
+			charging_full_current = <100 >;	/* unit: mA */
+
+			/* Charging Current Setting */
+			config_usb_if = <1 >;
+			usb_charger_current_suspend = <0 >;	/* Unit: 0.01 mA */
+			usb_charger_current_unconfigured = <7000 >;	/* Unit: 0.01 mA */
+			usb_charger_current_configured = <50000 >;	/* Unit: 0.01 mA */
+			usb_charger_current = <50000 >;	/* Unit: 0.01 mA */
+			ac_charger_current = <95000 >;	/* Unit: 0.01 mA */
+			non_std_ac_charger_current = <50000 >;	/* Unit: 0.01 mA */
+			charging_host_charger_current = <65000 >;	/* Unit: 0.01 mA */
+			apple_0_5a_charger_current = <50000 >;	/* Unit: 0.01 mA */
+			apple_1_0a_charger_current = <65000 >;	/* Unit: 0.01 mA */
+			apple_2_1a_charger_current = <80000 >;	/* Unit: 0.01 mA */
+
+			/* charger error check */
+			bat_low_temp_protect_enable = <1 >;
+			v_charger_enable = <0 >;	/* 1:on , 0:off */
+			v_charger_max = <6500 >;	/* unit: mV */
+			v_charger_min = <4400 >;
+
+			/*  Tracking TIME */
+			onehundred_percent_tracking_time = <10 >;	/* Unit: second */
+			npercent_tracking_time = <20 >;	/* Unit: second */
+			sync_to_real_tracking_time = <60 >;	/* Unit: second */
+			v_0percent_tracking = <3450 >;	/* Unit: mV */
+
+			/* High battery support */
+			high_battery_voltage_support = <1 >;
 		};
+
 
 		mdcldma:mdcldma@1000A000 {
 			compatible = "mediatek,mdcldma";
@@ -1202,6 +1268,24 @@
 			vtouch-supply = <&mt_pmic_vgp1_ldo_reg>;
 		};
 
+		rt9458@6a {
+			compatible = "richtek,rt9458";
+			reg = <0x6a>;
+			charger_name = "primary_charger";
+			ichg = <100000>;		/* 10uA */
+			/*
+			* For AICR, only support 100/500/700/1000mA/no limit
+			* Value higher than 1000mA stands for no limit
+			*/
+			aicr = <50000>;		/* 10uA */
+			mivr = <4500>;		/* mV */
+			cv = <4400000>;		/* uV */
+			ieoc = <100000>;	/* uA */
+			status = "okay";
+			enable_te;
+			enable_wdt;
+		};
+
 		accdet: accdet@ {
 			compatible = "mediatek,mt6735-accdet",
 						"mediatek,mt6735m-accdet";
@@ -1239,11 +1323,13 @@
 
 		/* NFC start */
 		nfc:nfc@0 {
-			compatible = "mediatek,nfc-gpio-v2";
-			gpio-ven = <4>;
-			gpio-rst = <3>;
-			gpio-eint = <1>;
-			gpio-irq = <2>;
+			compatible = "samsung,nfc-sec";
+			ven-gpio = <4>;
+			irq-gpio = <2>;
+			firm-gpio = <3>;
+			clk_req-gpio = <55>;
+			pvdd_en-gpio = <0>;
+
 		};
 		/* NFC end */
 
@@ -1305,7 +1391,7 @@
 			interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_LOW>;
 		};
 
-		mt_soc_dl1_pcm@11220000 {
+		audgpio: mt_soc_dl1_pcm@11220000 {
 			compatible = "mediatek,mt-soc-dl1-pcm";
 			reg = <0x11220000 0x1000>;
 			interrupts = <GIC_SPI 144 IRQ_TYPE_LEVEL_LOW>;
@@ -1807,6 +1893,8 @@
 	};
 	lcm: lcm {
 		compatible = "mediatek,lcm";
+                vdd28-supply = <&mt_pmic_vgp1_ldo_reg>;
+                vddi18-supply = <&mt_pmic_vio18_ldo_reg>;
 	};
 
 /* sensor part */
@@ -1872,7 +1960,7 @@
 			compatible = "android,firmware";
 			fstab {
 				compatible = "android,fstab";
-#ifndef CONFIG_MTK_AB_OTA_UPDATER
+#if !defined(CONFIG_SYSTEM_AS_ROOT) && !defined(CONFIG_MTK_AB_OTA_UPDATER)
 				system {
 					compatible = "android,system";
 					dev = "/dev/block/platform/mtk-msdc.0/11230000.msdc0/by-name/system";

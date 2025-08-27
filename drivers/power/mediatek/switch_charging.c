@@ -116,6 +116,10 @@ int g_temp_status = TEMP_POS_10_TO_POS_45;
 kal_bool temp_error_recovery_chr_flag = KAL_TRUE;
 #endif
 
+#if defined(CONFIG_FIH_PROJECT_FRT)
+extern int PSE[MODE_NUM][CONTENT_NUM];
+#endif
+
 /* ============================================================ // */
 /* function prototype */
 /* ============================================================ // */
@@ -693,23 +697,27 @@ int mtk_chr_is_charger_exist(unsigned char *exist)
 	return 0;
 }
 
+#if defined(CONFIG_FIH_PROJECT_NE1)
+//
 #define HIGH_TEMP_CHARGING_FULL_VOLTAGE     4350
+#endif
 
 static unsigned int charging_full_check(void)
 {
 	unsigned int status;
 
 	battery_charging_control(CHARGING_CMD_GET_CHARGING_STATUS, &status);
-	if (status == KAL_TRUE)
-	{
-		if (BMT_status.temperature > CHARG_TEMP_LEVEL_2)
-		{
-			if (BMT_status.bat_vol < HIGH_TEMP_CHARGING_FULL_VOLTAGE)
-			{
+	if (status == KAL_TRUE) {
+
+#if defined(CONFIG_FIH_PROJECT_NE1)
+		//
+		if (BMT_status.temperature > CHARG_TEMP_LEVEL_2) {
+			if (BMT_status.bat_vol < HIGH_TEMP_CHARGING_FULL_VOLTAGE) {
 				g_full_check_count = 0;
 				return KAL_FALSE;
 			}
 		}
+#endif
 
 		g_full_check_count++;
 		if (g_full_check_count >= FULL_CHECK_TIMES)
@@ -749,32 +757,63 @@ static int mtk_check_aicr_upper_bound(void)
 
 void select_charging_current(void)
 {
+#if defined(CONFIG_FIH_PROJECT_NE1)
+	extern unsigned short fih_hwid;
+#endif
+#if defined(CONFIG_FIH_PROJECT_FRT)
+	unsigned int current_temp;
+#endif
+
 	if (g_ftm_battery_flag) {
 		battery_log(BAT_LOG_CRTI, "[BATTERY] FTM charging : %d\r\n",
 			    charging_level_data[0]);
 		g_temp_CC_value = charging_level_data[0];
+#if defined(CONFIG_FIH_PROJECT_FRT)
+		g_temp_input_CC_value = CHARGE_CURRENT_1000_00_MA;
+#endif
 
-		if (g_temp_CC_value == CHARGE_CURRENT_450_00_MA)
-		{
+#if defined(CONFIG_FIH_PROJECT_FRT)
+		if (g_temp_CC_value > CHARGE_CURRENT_0_00_MA && g_temp_CC_value <= CHARGE_CURRENT_500_00_MA) {
+			g_temp_CC_value = CHARGE_CURRENT_500_00_MA;
+		}
+		else if (g_temp_CC_value > CHARGE_CURRENT_500_00_MA && g_temp_CC_value <= CHARGE_CURRENT_650_00_MA) {
+			g_temp_CC_value = CHARGE_CURRENT_650_00_MA;
+		}
+		else if (g_temp_CC_value > CHARGE_CURRENT_650_00_MA && g_temp_CC_value <= CHARGE_CURRENT_800_00_MA) {
+			g_temp_CC_value = CHARGE_CURRENT_800_00_MA;
+		}
+		else if (g_temp_CC_value > CHARGE_CURRENT_800_00_MA && g_temp_CC_value <= CHARGE_CURRENT_1000_00_MA) {
+			g_temp_CC_value = CHARGE_CURRENT_950_00_MA;
+		}
+		else {
+			battery_log(BAT_LOG_CRTI, "[BATTERY] charging current out of range \r\n");
+			g_temp_CC_value = batt_cust_data.ac_charger_current;
+		}
+#else
+		if (g_temp_CC_value == CHARGE_CURRENT_450_00_MA) {
 			g_temp_input_CC_value = CHARGE_CURRENT_500_00_MA;
+#if defined(CONFIG_FIH_PROJECT_NE1)
 		}
-        else if(g_temp_CC_value == CHARGE_CURRENT_700_00_MA)
-        {
-            g_temp_input_CC_value = CHARGE_CURRENT_MAX;
-            g_temp_CC_value = CHARGE_CURRENT_800_00_MA;
-        }
-        else if(g_temp_CC_value == CHARGE_CURRENT_900_00_MA)
-        {
-            g_temp_input_CC_value = CHARGE_CURRENT_MAX;
-            g_temp_CC_value = CHARGE_CURRENT_950_00_MA;
-		}
-		else
+		//modify for charging patch
+		else if(g_temp_CC_value == CHARGE_CURRENT_700_00_MA)
 		{
+			g_temp_input_CC_value = CHARGE_CURRENT_MAX;
+			//g_temp_CC_value = CHARGE_CURRENT_775_00_MA;
+			g_temp_CC_value = CHARGE_CURRENT_800_00_MA;
+		}
+		else if(g_temp_CC_value == CHARGE_CURRENT_900_00_MA)
+		{
+			g_temp_input_CC_value = CHARGE_CURRENT_MAX;
+			//g_temp_CC_value = CHARGE_CURRENT_900_00_MA;
+			g_temp_CC_value = CHARGE_CURRENT_950_00_MA;
+#endif
+		} else {
 			g_temp_input_CC_value = CHARGE_CURRENT_MAX;
 			g_temp_CC_value = batt_cust_data.ac_charger_current;
 
 			battery_log(BAT_LOG_CRTI, "[BATTERY] set_ac_current \r\n");
 		}
+#endif
 	} else {
 		if (BMT_status.charger_type == STANDARD_HOST) {
 #ifdef CONFIG_USB_IF
@@ -813,23 +852,41 @@ void select_charging_current(void)
 
 			g_temp_CC_value = batt_cust_data.ac_charger_current;
 
+#if defined(CONFIG_FIH_PROJECT_FRT)
 			g_temp_input_CC_value = CHARGE_CURRENT_1000_00_MA;
+#endif
+#if defined(CONFIG_FIH_PROJECT_NE1)
+			if (fih_hwid > 0x113) {//
+				g_temp_input_CC_value = CHARGE_CURRENT_1000_00_MA;
+			}
 
-			#ifdef F_CHARG_TEMP_CURR_CTRL
-            if (BMT_status.temperature < CHARG_TEMP_LEVEL_1)
-			{
-                g_temp_CC_value = AC_CHARG_CURR_TEMP_LEVEL_1;
-            }
-            else if(BMT_status.temperature > CHARG_TEMP_LEVEL_2)
-			{
-                g_temp_CC_value = AC_CHARG_CURR_TEMP_LEVEL_2;
-            }
-	        #endif
+//
+#if 0
+			//
+			if (fih_hwid > 0x113) {
+				g_temp_CC_value = AC_CHARGER_CURRENT_2A_ADAPTOR;
+			}
+#endif
 
-		#ifdef PUMP_EXPRESS_SERIES
+			//add
+			#ifdef FIH_CHARG_TEMP_CURR_CTRL
+			if (BMT_status.temperature < CHARG_TEMP_LEVEL_1) {
+				g_temp_CC_value = AC_CHARG_CURR_TEMP_LEVEL_1;
+			}
+			else if(BMT_status.temperature > CHARG_TEMP_LEVEL_2) {
+				g_temp_CC_value = AC_CHARG_CURR_TEMP_LEVEL_2;
+			}
+			#endif
+
+			//
+			#ifdef PUMP_EXPRESS_SERIES
 			mtk_pep_set_charging_current(&g_temp_CC_value, &g_temp_input_CC_value);
 			mtk_pep20_set_charging_current(&g_temp_CC_value, &g_temp_input_CC_value);
-        #endif
+			#endif
+#else
+			mtk_pep_set_charging_current(&g_temp_CC_value, &g_temp_input_CC_value);
+			mtk_pep20_set_charging_current(&g_temp_CC_value, &g_temp_input_CC_value);
+#endif
 
 		} else if (BMT_status.charger_type == CHARGING_HOST) {
 			g_temp_input_CC_value = batt_cust_data.charging_host_charger_current;
@@ -858,25 +915,33 @@ void select_charging_current(void)
 #if defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT)
 		set_jeita_charging_current();
 #endif
+
+#if defined(CONFIG_FIH_PROJECT_FRT)
+		current_temp = PSE[BMT_status.charge_mode][CHARGE_CUR+g_call_state];
+		if(g_temp_CC_value > current_temp) g_temp_CC_value = current_temp;
+#endif
 	}
 
+#if !defined(CONFIG_FIH_PROJECT_FRT)
 	mtk_check_aicr_upper_bound();
-
-#ifdef F_CHARG_TEMP_CURR_CTRL
-	if (BMT_status.temperature < CHARG_TEMP_LEVEL_1)
-	{
+#endif
+#if defined(CONFIG_FIH_PROJECT_NE1)
+//add
+#ifdef FIH_CHARG_TEMP_CURR_CTRL
+	if (BMT_status.temperature < CHARG_TEMP_LEVEL_1) {
 		if (g_temp_CC_value > AC_CHARG_CURR_TEMP_LEVEL_1)
 		{
 			g_temp_CC_value = AC_CHARG_CURR_TEMP_LEVEL_1;
 		}
 	}
-	else if(BMT_status.temperature > CHARG_TEMP_LEVEL_2)
-	{
+	else if(BMT_status.temperature > CHARG_TEMP_LEVEL_2) {
 		if (g_temp_CC_value > AC_CHARG_CURR_TEMP_LEVEL_2)
 		{
 			g_temp_CC_value = AC_CHARG_CURR_TEMP_LEVEL_2;
+			//g_temp_CC_value = AC_CHARG_CURR_TEMP_LEVEL_1; // USB current is small.
 		}
 	}
+#endif
 #endif
 }
 
@@ -960,7 +1025,9 @@ static void mtk_select_ichg_aicr(void)
 #ifndef CONFIG_MTK_SWITCH_INPUT_OUTPUT_CURRENT_SUPPORT
 	else if (g_bcct_flag == 1) {
 		select_charging_current_bcct();
-		select_charging_current();
+#if defined(CONFIG_FIH_PROJECT_FRT) || defined(CONFIG_FIH_PROJECT_NE1)
+		select_charging_current(); // Don't use the bcct.
+#endif
 		battery_log(BAT_LOG_FULL,
 			"[BATTERY] select_charging_current_bcct !\n");
 	} else {
@@ -970,8 +1037,13 @@ static void mtk_select_ichg_aicr(void)
 	}
 #else
 	else if (g_bcct_flag == 1 || g_bcct_input_flag == 1) {
+#if defined(CONFIG_FIH_PROJECT_FRT) || defined(CONFIG_FIH_PROJECT_NE1)
 		select_charging_current_bcct();
+		select_charging_current();//
+#else
 		select_charging_current();
+		select_charging_current_bcct();
+#endif
 		battery_log(BAT_LOG_FULL,
 			"[BATTERY] select_charging_curret_bcct !\n");
 	} else {
@@ -980,6 +1052,7 @@ static void mtk_select_ichg_aicr(void)
 			"[BATTERY] select_charging_curret !\n");
 	}
 #endif
+
 	battery_log(BAT_LOG_CRTI,
 		"[BATTERY] Default CC mode charging : %d, input current = %d\n",
 		g_temp_CC_value, g_temp_input_CC_value);
@@ -990,7 +1063,11 @@ static void mtk_select_ichg_aicr(void)
 		&g_temp_CC_value);
 
 	/* For thermal, they need to enable charger immediately */
-	if (g_temp_CC_value > 0 && g_temp_input_CC_value > 0 && mt_usb_is_device())
+#if defined(CONFIG_FIH_PROJECT_FRT) || defined(CONFIG_FIH_PROJECT_NE1)
+	if (g_temp_CC_value > 0 && g_temp_input_CC_value > 0 && mt_usb_is_device())// judge usb_hos.
+#else
+	if (g_temp_CC_value > 0 && g_temp_input_CC_value > 0)
+#endif
 		battery_charging_control(CHARGING_CMD_ENABLE, &enable_charger);
 
 	/* If AICR < 300mA, stop PE+/PE+20 */
@@ -1024,12 +1101,21 @@ static void mtk_select_cv(void)
 	int ret = 0;
 	u32 dynamic_cv = 0;
 	BATTERY_VOLTAGE_ENUM cv_voltage;
-	BATTERY_VOLTAGE_ENUM sc_voltage;
+#ifdef CONFIG_MTK_BQ24157_SUPPORT // this is  for DPM
+	BATTERY_VOLTAGE_ENUM sc_voltage; //add 
+#endif
 
 #ifdef CONFIG_MTK_JEITA_STANDARD_SUPPORT
 	/* If temperautre is abnormal, return not permitted */
 	if (g_temp_status != TEMP_POS_10_TO_POS_45)
 		return;
+#endif
+
+#if !defined(CONFIG_FIH_PROJECT_FRT) && !defined(CONFIG_FIH_PROJECT_NE1)
+	if (batt_cust_data.high_battery_voltage_support)
+		cv_voltage = BATTERY_VOLT_04_340000_V;
+	else
+		cv_voltage = BATTERY_VOLT_04_200000_V;
 #endif
 
 	ret = mtk_get_dynamic_cv(&dynamic_cv);
@@ -1038,34 +1124,35 @@ static void mtk_select_cv(void)
 		battery_log(BAT_LOG_FULL, "%s: set dynamic cv = %dmV\n",
 			__func__, dynamic_cv);
 	}
-	
-	if (batt_cust_data.high_battery_voltage_support)
-	{
-		cv_voltage = BATTERY_VOLT_04_400000_V;
 
-	#ifdef F_CHARG_TEMP_CURR_CTRL
-		if (BMT_status.temperature < CHARG_TEMP_LEVEL_1)
-		{
+#if defined(CONFIG_FIH_PROJECT_FRT) || defined(CONFIG_FIH_PROJECT_NE1)
+	if (batt_cust_data.high_battery_voltage_support)
+	{ //add 
+#if defined(CONFIG_FIH_PROJECT_FRT)
+		cv_voltage = PSE[BMT_status.charge_mode][STOP_VOL+g_call_state];
+#else
+		cv_voltage = BATTERY_VOLT_04_400000_V;//NE1's battery volume of voltage is 4.4V.  
+#endif
+		#ifdef FIH_CHARG_TEMP_CURR_CTRL
+		if (BMT_status.temperature < CHARG_TEMP_LEVEL_1) {
 			cv_voltage = CHARG_VOLTAGE_TEMP_LEVEL_1;
 		}
-		else if (BMT_status.temperature > CHARG_TEMP_LEVEL_2)
-		{
+		else if (BMT_status.temperature > CHARG_TEMP_LEVEL_2) {
 			cv_voltage = CHARG_VOLTAGE_TEMP_LEVEL_2;
 		}
-	#endif
+		#endif
 	}
 	else
-	{
 		cv_voltage = BATTERY_VOLT_04_200000_V;
-	}
 
-#ifdef CONFIG_MTK_BQ24157_SUPPORT
+#ifdef CONFIG_MTK_BQ24157_SUPPORT // this is  for DPM
 	/*Set Special Charger Voltage*/
 	if (BMT_status.bat_vol >= SPECIAL_CHARGING_VOLTAGE)
 	{
 		sc_voltage = BATTERY_VOLT_04_520000_V;
 		battery_charging_control(CHARGING_CMD_SET_SCV, &sc_voltage);
 	}
+#endif
 #endif
 
 	battery_charging_control(CHARGING_CMD_SET_CV_VOLTAGE, &cv_voltage);
@@ -1132,7 +1219,9 @@ PMU_STATUS BAT_PreChargeModeAction(void)
 	int ret = 0;
 	bool bif_exist = false;
 #endif
-	//unsigned int led_en = true;
+#if !defined(CONFIG_FIH_PROJECT_FRT) && !defined(CONFIG_FIH_PROJECT_NE1)
+	unsigned int led_en = true;
+#endif
 
 	battery_log(BAT_LOG_CRTI, "[BATTERY] Pre-CC mode charge, timer=%d on %d !!\n\r",
 		    BMT_status.PRE_charging_time, BMT_status.total_charging_time);
@@ -1155,7 +1244,9 @@ PMU_STATUS BAT_PreChargeModeAction(void)
 	}
 #endif
 
-	//battery_charging_control(CHARGING_CMD_SET_PWRSTAT_LED_EN, &led_en);
+#if !defined(CONFIG_FIH_PROJECT_FRT) && !defined(CONFIG_FIH_PROJECT_NE1)
+	battery_charging_control(CHARGING_CMD_SET_PWRSTAT_LED_EN, &led_en);
+#endif
 
 	/*  Enable charger */
 	pchr_turn_on_charging();
@@ -1192,7 +1283,9 @@ PMU_STATUS BAT_PreChargeModeAction(void)
 
 PMU_STATUS BAT_ConstantCurrentModeAction(void)
 {
-	//unsigned int led_en = true;
+#if !defined(CONFIG_FIH_PROJECT_FRT) && !defined(CONFIG_FIH_PROJECT_NE1)
+	unsigned int led_en = true;
+#endif
 
 	battery_log(BAT_LOG_CRTI, "[BATTERY] CC mode charge, timer=%d on %d!!\n",
 		    BMT_status.CC_charging_time, BMT_status.total_charging_time);
@@ -1202,7 +1295,9 @@ PMU_STATUS BAT_ConstantCurrentModeAction(void)
 	BMT_status.TOPOFF_charging_time = 0;
 	BMT_status.total_charging_time += BAT_TASK_PERIOD;
 
-	//battery_charging_control(CHARGING_CMD_SET_PWRSTAT_LED_EN, &led_en);
+#if !defined(CONFIG_FIH_PROJECT_FRT) && !defined(CONFIG_FIH_PROJECT_NE1)
+	battery_charging_control(CHARGING_CMD_SET_PWRSTAT_LED_EN, &led_en);
+#endif
 
 	/*  Enable charger */
 	pchr_turn_on_charging();
@@ -1219,7 +1314,9 @@ PMU_STATUS BAT_ConstantCurrentModeAction(void)
 
 PMU_STATUS BAT_BatteryFullAction(void)
 {
-	//unsigned int led_en = false;
+#if !defined(CONFIG_FIH_PROJECT_FRT) && !defined(CONFIG_FIH_PROJECT_NE1)
+	unsigned int led_en = false;
+#endif
 
 	battery_log(BAT_LOG_CRTI, "[BATTERY] Battery full !!\n\r");
 
@@ -1232,7 +1329,9 @@ PMU_STATUS BAT_BatteryFullAction(void)
 	BMT_status.bat_in_recharging_state = KAL_FALSE;
 
 	battery_log(BAT_LOG_FULL, "Turn off PWRSTAT LED\n");
-	//battery_charging_control(CHARGING_CMD_SET_PWRSTAT_LED_EN, &led_en);
+#if !defined(CONFIG_FIH_PROJECT_FRT) && !defined(CONFIG_FIH_PROJECT_NE1)
+	battery_charging_control(CHARGING_CMD_SET_PWRSTAT_LED_EN, &led_en);
+#endif
 
 	/*
 	 * If CV is set to lower value by JEITA,
@@ -1276,13 +1375,18 @@ PMU_STATUS BAT_BatteryHoldAction(void)
 	return PMU_STATUS_OK;
 }
 
-extern unsigned int g_charging_error;
+
+#if defined(CONFIG_FIH_PROJECT_FRT) || defined(CONFIG_FIH_PROJECT_NE1)
+extern unsigned int g_charging_error;	// charging error information.[20170111]
 unsigned int g_charging_error_temp = 0;
+#endif
 
 PMU_STATUS BAT_BatteryStatusFailAction(void)
 {
 	unsigned int charging_enable;
 
+#if defined(CONFIG_FIH_PROJECT_FRT) || defined(CONFIG_FIH_PROJECT_NE1)
+	// charging error information.[20170111] start
 	char *charging_error[ ] = {
 		"cmd_discharging",
 		"bat_ntc_pin_error",
@@ -1298,7 +1402,7 @@ PMU_STATUS BAT_BatteryStatusFailAction(void)
 		"charging_time_over"
 	};
 	int i_err = 0;
-	
+
 	unsigned int charging_error_temp = 0;
 	g_charging_error_temp |= g_charging_error;
 	charging_error_temp = g_charging_error_temp;
@@ -1310,6 +1414,10 @@ PMU_STATUS BAT_BatteryStatusFailAction(void)
 		}
 		charging_error_temp >>= 1;
 	}
+	// charging error information.[20170111] end
+#else
+	battery_log(BAT_LOG_CRTI, "[BATTERY] BAD Battery status... Charging Stop !!\n\r");
+#endif
 
 #if defined(CONFIG_MTK_JEITA_STANDARD_SUPPORT)
 	if ((g_temp_status == TEMP_ABOVE_POS_60) || (g_temp_status == TEMP_BELOW_NEG_10))
@@ -1350,27 +1458,35 @@ PMU_STATUS BAT_BatteryStatusFailAction(void)
 
 void mt_battery_charging_algorithm(void)
 {
+#if defined(CONFIG_FIH_PROJECT_NE1)
+	extern unsigned short fih_hwid;
+#endif
+
 	battery_charging_control(CHARGING_CMD_RESET_WATCH_DOG_TIMER, NULL);
 
 	/* Generate AICR upper bound by AICL */
-	if (!mtk_is_pep_series_connect())
-	{
-		//battery_charging_control(CHARGING_CMD_RUN_AICL, &g_aicr_upper_bound);
-	}
-
+#if defined(CONFIG_FIH_PROJECT_NE1)
 #if 1
-	if (BMT_status.charger_type == NONSTANDARD_CHARGER)
-		battery_charging_control(CHARGING_CMD_RUN_AICL, &g_aicr_upper_bound);
+	if (fih_hwid > 0x113 && BMT_status.charger_type == NONSTANDARD_CHARGER) //
+		battery_charging_control(CHARGING_CMD_RUN_AICL, &g_aicr_upper_bound); // BQ24157 Not support
+#endif
+#else
+	if (!mtk_is_pep_series_connect()) {
+		battery_charging_control(CHARGING_CMD_RUN_AICL,
+			&g_aicr_upper_bound);
+	}
 #endif
 
 	mtk_pep20_check_charger();
 	mtk_pep_check_charger();
 
-	if (BMT_status.bat_charging_state != CHR_ERROR)
-	{
+#if defined(CONFIG_FIH_PROJECT_FRT) || defined(CONFIG_FIH_PROJECT_NE1)
+	// charging error information.[20170111]
+	if (BMT_status.bat_charging_state != CHR_ERROR) {
 		g_charging_error_temp = 0;
 	}
-	
+#endif
+
 	switch (BMT_status.bat_charging_state) {
 	case CHR_PRE:
 		BAT_PreChargeModeAction();

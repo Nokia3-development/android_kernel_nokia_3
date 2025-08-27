@@ -38,6 +38,8 @@
 #include "ddp_mmp.h"
 #include "disp_dts_gpio.h"
 
+#include "primary_display.h"
+
 /* static unsigned int _dsi_reg_update_wq_flag = 0; */
 static DECLARE_WAIT_QUEUE_HEAD(_dsi_reg_update_wq);
 atomic_t PMaster_enable = ATOMIC_INIT(0);
@@ -219,6 +221,11 @@ void ddp_set_mipi26m(int en)
 
 #define DSI_READREG32(type, dst, src) mt_reg_sync_writel(INREG32(src), dst)
 
+
+#define BBOX_LCM_DISPLAY_ON_FAIL		do {printk("BBox;%s: LCM DISPLAY ON fail\n", __func__); printk("BBox::UEC;0::2\n");} while (0);
+#define BBOX_LCM_DISPLAY_OFF_FAIL		do {printk("BBox;%s: LCM DISPLAY ON fail\n", __func__); printk("BBox::UEC;0::3\n");} while (0);
+#define BBOX_LCM_MIPI_FAIL		do {printk("BBox;%s: LCM MIPI fail\n", __func__); printk("BBox::UEC;0::5\n");} while (0);
+#define BBOX_LCM_INIT_FAIL		do {printk("BBox;%s: LCM INIT fail\n", __func__); printk("BBox::UEC;0::7\n");} while (0);
 
 struct t_dsi_context {
 	unsigned int lcm_width;
@@ -2828,15 +2835,18 @@ int DSI_Send_ROI(DISP_MODULE_ENUM module, void *handle, unsigned int x, unsigned
 
 	unsigned int data_array[16];
 
-	data_array[0] = 0x00053902;
-	data_array[1] = (x1_MSB << 24) | (x0_LSB << 16) | (x0_MSB << 8) | 0x2a;
-	data_array[2] = (x1_LSB);
-	DSI_set_cmdq(module, handle, data_array, 3, 1);
-	data_array[0] = 0x00053902;
-	data_array[1] = (y1_MSB << 24) | (y0_LSB << 16) | (y0_MSB << 8) | 0x2b;
-	data_array[2] = (y1_LSB);
-	DSI_set_cmdq(module, handle, data_array, 3, 1);
-	DISPMSG("DSI_Send_ROI Done!\n");
+	if (!primary_display_is_video_mode()) {
+		data_array[0] = 0x00053902;
+		data_array[1] = (x1_MSB << 24) | (x0_LSB << 16) | (x0_MSB << 8) | 0x2a;
+		data_array[2] = (x1_LSB);
+		DSI_set_cmdq(module, handle, data_array, 3, 1);
+		data_array[0] = 0x00053902;
+		data_array[1] = (y1_MSB << 24) | (y0_LSB << 16) | (y0_MSB << 8) | 0x2b;
+		data_array[2] = (y1_LSB);
+		DSI_set_cmdq(module, handle, data_array, 3, 1);
+		DISPMSG("DSI_Send_ROI Done!\n");
+	} else
+		DISPDBG("LCM is video mode, no need DSI send ROI!\n");
 
 	/* data_array[0]= 0x002c3909; */
 	/* DSI_set_cmdq(module, handle, data_array, 1, 0); */
@@ -4209,6 +4219,7 @@ int ddp_dsi_build_cmdq(DISP_MODULE_ENUM module, void *cmdq_trigger_handle, CMDQ_
 
 	if (cmdq_trigger_handle == NULL) {
 		DISPMSG("cmdq_trigger_handle is NULL\n");
+		BBOX_LCM_INIT_FAIL
 		return -1;
 	}
 
@@ -4393,6 +4404,7 @@ int ddp_dsi_build_cmdq(DISP_MODULE_ENUM module, void *cmdq_trigger_handle, CMDQ_
 				/* DSI_OUTREG32(NULL, &DSI_REG[dsi_i]->DSI_RX_DATA0,0); */
 				ret = 0;	/* esd pass */
 			} else {
+				BBOX_LCM_DISPLAY_ON_FAIL
 				ret = 1;	/* esd fail */
 				break;
 			}

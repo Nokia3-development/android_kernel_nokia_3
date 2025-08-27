@@ -1460,8 +1460,6 @@ static int do_mode_select(struct fsg_common *common, struct fsg_buffhd *bh)
 }
 
 
-/*-------------------------------------------------------------------------*/
-
 static int halt_bulk_in_endpoint(struct fsg_dev *fsg)
 {
 	int	rc;
@@ -1842,7 +1840,6 @@ static int check_command(struct fsg_common *common, int cmnd_size,
 		return -EINVAL;
 	}
 
-	/* Check that only command bytes listed in the mask are non-zero */
 	common->cmnd[1] &= 0x1f;			/* Mask away the LUN */
 	for (i = 1; i < cmnd_size; ++i) {
 		if (common->cmnd[i] && !(mask & (1 << i))) {
@@ -1858,7 +1855,6 @@ static int check_command(struct fsg_common *common, int cmnd_size,
 		curlun->sense_data = SS_MEDIUM_NOT_PRESENT;
 		return -EINVAL;
 	}
-
 	return 0;
 }
 
@@ -2114,6 +2110,9 @@ static int do_scsi_command(struct fsg_common *common)
 		if (reply == 0)
 			reply = do_write(common);
 		break;
+
+
+
 
 	/*
 	 * Some mandatory commands that we recognize but don't implement.

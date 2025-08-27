@@ -23,6 +23,7 @@ static struct class *android_class;
 static struct device *android_device;
 static int index;
 
+
 struct device *create_function_device(char *name)
 {
 	if (android_device && !IS_ERR(android_device))
@@ -33,6 +34,10 @@ struct device *create_function_device(char *name)
 }
 EXPORT_SYMBOL_GPL(create_function_device);
 #endif
+
+// add for BBOX
+#define BBOX_USB_CONFIGURATION_FAIL    do {printk("BBox;%s: USB configuration fail!\n", __func__); printk("BBox::UEC;3::2\n");} while (0);
+// add for BBOX
 
 int check_user_usb_string(const char *name,
 		struct usb_gadget_strings *stringtab_dev)
@@ -304,6 +309,7 @@ static ssize_t gadget_dev_desc_UDC_store(struct gadget_info *gi,
 		ret = unregister_gadget(gi);
 		if (ret)
 			goto err;
+		kfree(name);
 	} else {
 		if (gi->udc_name) {
 			ret = -EBUSY;
@@ -1463,7 +1469,9 @@ static int configfs_composite_bind(struct usb_gadget *gadget,
 err_purge_funcs:
 	purge_configs_funcs(gi);
 err_comp_cleanup:
+	printk("BBox::UEC;3::2\n");
 	composite_dev_cleanup(cdev);
+	BBOX_USB_CONFIGURATION_FAIL
 	return ret;
 }
 

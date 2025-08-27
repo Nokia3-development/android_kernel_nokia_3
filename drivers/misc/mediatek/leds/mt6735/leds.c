@@ -919,14 +919,6 @@ void mt_mt65xx_led_set(struct led_classdev *led_cdev, enum led_brightness level)
 				    (level * CONFIG_LIGHTNESS_MAPPING_VALUE) /
 				    255;
 			}
-
-			// add for lightness   
-			if ((level <11) &&(level > 7))
-			{
-				led_data->level = 8;
-				level = 8;				
-			}
-
 			LEDS_DEBUG
 			    ("Set Backlight directly %d at time %lu, mapping level is %d\n",
 			     led_data->level, jiffies, level);
@@ -958,14 +950,6 @@ void mt_mt65xx_led_set(struct led_classdev *led_cdev, enum led_brightness level)
 				    (level * CONFIG_LIGHTNESS_MAPPING_VALUE) /
 				    255;
 			}
-
-			// add for lightness   
-			if ((level <11) &&(level > 7))
-			{
-				led_data->level = 8;
-				level = 8;			
-			}
-
 			LEDS_DEBUG
 			    ("Set Backlight directly %d at time %lu, mapping level is %d\n",
 			     led_data->level, jiffies, level);

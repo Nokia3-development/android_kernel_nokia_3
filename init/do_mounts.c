@@ -504,6 +504,8 @@ void __init change_floppy(char *fmt, ...)
 }
 #endif
 
+void __attribute__((weak)) mount_block_root_post(void) { }
+
 void __init mount_root(void)
 {
 #ifdef CONFIG_ROOT_NFS
@@ -530,6 +532,7 @@ void __init mount_root(void)
 #ifdef CONFIG_BLOCK
 	create_dev("/dev/root", ROOT_DEV);
 	mount_block_root("/dev/root", root_mountflags);
+	mount_block_root_post();
 #endif
 }
 

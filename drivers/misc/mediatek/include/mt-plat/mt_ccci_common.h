@@ -283,6 +283,7 @@ typedef enum {
 	ID_MD_MPU_ASSERT = 21,
 	ID_ENTER_FLIGHT_MODE = 22,
 	ID_LEAVE_FLIGHT_MODE = 23,
+	ID_MD_RF_DESENSE = 24, /* Notify MD camera on/off will affect MD RF */
 
 	ID_UPDATE_TX_POWER = 100,   /* for SWTP */
 
@@ -494,5 +495,6 @@ unsigned int get_wm_bitmap_for_ubin(void); /* Universal bin */
 void update_rat_bit_map_to_drv(int md_id, unsigned int val);
 int get_md_img_type(int md_id);
 int get_legacy_md_type(int md_id);
+int check_md_type(int data);
 
 #endif

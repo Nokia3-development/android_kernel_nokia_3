@@ -27,6 +27,7 @@
 #define VERITY_TABLE_ARGS 10
 #define VERITY_COMMANDLINE_PARAM_LENGTH 20
 #define BUILD_VARIANT 20
+#define SECURITY_FUSED 10
 
 /*
  * <subject>:<sha1-id> is the format for the identifier.

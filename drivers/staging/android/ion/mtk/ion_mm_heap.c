@@ -40,6 +40,7 @@ typedef struct {
 	unsigned int security;
 	unsigned int coherent;
 	void *pVA;
+	void *va;
 	unsigned int MVA;
 	ion_mm_buf_debug_info_t dbg_info;
 	ion_mm_buf_destroy_callback_t *destroy_fn;
@@ -96,6 +97,7 @@ struct page_info {
 };
 
 static size_t mm_heap_total_memory;
+static int mm_heap_total_memory_flag;
 unsigned int caller_pid;
 unsigned int caller_tid;
 unsigned long long alloc_large_fail_ts;
@@ -209,7 +211,25 @@ static int ion_mm_heap_allocate(struct ion_heap *heap,
 	unsigned int max_order = orders[0];
 	ion_mm_buffer_info *pBufferInfo = NULL;
 	unsigned long long start, end;
+	unsigned long user_va = 0;
 
+#ifdef CONFIG_MTK_M4U
+	if (heap->id == ION_HEAP_TYPE_MULTIMEDIA_MAP_MVA) {
+		if (!size % PAGE_SIZE) {
+			IONMSG("%s:size not align\n", __func__);
+			return -1;
+		}
+
+		table = m4u_create_sgtable(align, (unsigned int)size);
+		if (!table) {
+			IONMSG("%s:create table fail\n", __func__);
+			return -ENOMEM;
+		}
+		user_va = align;
+
+		goto mva_exit;
+	}
+#endif
 	if (align > PAGE_SIZE) {
 		IONMSG("%s align %lu is larger than PAGE_SIZE.\n", __func__, align);
 		return -EINVAL;
@@ -272,7 +292,9 @@ static int ion_mm_heap_allocate(struct ion_heap *heap,
 		list_del(&info->list);
 		kfree(info);
 	}
-
+#ifdef CONFIG_MTK_M4U
+mva_exit:
+#endif
 	/* create MM buffer info for it */
 	pBufferInfo = kzalloc(sizeof(ion_mm_buffer_info), GFP_KERNEL);
 	if (IS_ERR_OR_NULL(pBufferInfo)) {
@@ -282,6 +304,7 @@ static int ion_mm_heap_allocate(struct ion_heap *heap,
 
 	buffer->sg_table = table;
 	pBufferInfo->pVA = 0;
+	pBufferInfo->va = (void *)user_va;
 	pBufferInfo->MVA = 0;
 	pBufferInfo->eModuleID = -1;
 	pBufferInfo->dbg_info.value1 = 0;
@@ -344,7 +367,6 @@ void ion_mm_heap_free_bufferInfo(struct ion_buffer *buffer)
 		kfree(pBufferInfo);
 	}
 }
-
 void ion_mm_heap_free(struct ion_buffer *buffer)
 {
 	struct ion_heap *heap = buffer->heap;
@@ -354,12 +376,24 @@ void ion_mm_heap_free(struct ion_buffer *buffer)
 	struct scatterlist *sg;
 	LIST_HEAD(pages);
 	int i;
-
 	mm_heap_total_memory -= buffer->size;
+	if (mm_heap_total_memory < 0) {
+		mm_heap_total_memory_flag += 1;
+		IONMSG("%s warning: total_size = %zu, buf_size = %zu, flag = %d\n",
+				__func__, mm_heap_total_memory, buffer->size,
+				mm_heap_total_memory_flag);
+		mm_heap_total_memory = 0;
+	}
+#ifdef CONFIG_MTK_M4U
+	if (heap->id == ION_HEAP_TYPE_MULTIMEDIA_MAP_MVA) {
+		ion_mm_heap_free_bufferInfo(buffer);
+		return;
+	}
+#endif
 
 	if (mm_heap_total_memory > 2147483647)
-		IONMSG("error: mm_free fail: size=%zu, total=%zu.\n",
-		       buffer->size, mm_heap_total_memory);
+		IONMSG("error: mm_free fail: size=%zu, total=%zu, flag=%d.\n",
+		       buffer->size, mm_heap_total_memory, mm_heap_total_memory_flag);
 
 	/* uncached pages come from the page pools, zero them before returning
 	 for security purposes (other allocations are zerod at alloc time */
@@ -405,6 +439,7 @@ static int ion_mm_heap_shrink(struct ion_heap *heap, gfp_t gfp_mask, int nr_to_s
 static int ion_mm_heap_phys(struct ion_heap *heap, struct ion_buffer *buffer,
 		ion_phys_addr_t *addr, size_t *len) {
 	ion_mm_buffer_info *pBufferInfo = (ion_mm_buffer_info *) buffer->priv_virt;
+	struct port_info m4u_info;
 
 	if (!pBufferInfo) {
 		IONMSG("[ion_mm_heap_phys]: Error. Invalid buffer.\n");
@@ -415,18 +450,32 @@ static int ion_mm_heap_phys(struct ion_heap *heap, struct ion_buffer *buffer,
 		return -EFAULT; /* Buffer not configured. */
 	}
 	/* Allocate MVA */
+	memset((void *)&m4u_info, 0, sizeof(m4u_info));
+	m4u_info.BufSize = buffer->size;
+	m4u_info.eModuleID = pBufferInfo->eModuleID;
+	m4u_info.mva = pBufferInfo->MVA;
+	m4u_info.security = pBufferInfo->security;
 
 	if (pBufferInfo->MVA == 0) {
-		int ret = m4u_alloc_mva_sg(pBufferInfo->eModuleID, buffer->sg_table,
+		int ret;
+
+		if (heap->id == ION_HEAP_TYPE_MULTIMEDIA_MAP_MVA) {
+			m4u_info.va = (unsigned long)pBufferInfo->va;
+			m4u_info.flags |= M4U_FLAGS_SG_READY;
+			ret = m4u_alloc_mva_by_va(&m4u_info, buffer->sg_table);
+			pBufferInfo->MVA = m4u_info.mva;
+		} else {
+			ret = m4u_alloc_mva_sg(pBufferInfo->eModuleID, buffer->sg_table,
 				buffer->size, pBufferInfo->security, pBufferInfo->coherent,
 				&pBufferInfo->MVA);
-
+		}
 		if (ret < 0) {
 			pBufferInfo->MVA = 0;
 			IONMSG("[ion_mm_heap_phys]: Error. Allocate MVA failed.\n");
 			return -EFAULT;
 		}
 	}
+
 	*(unsigned int *) addr = pBufferInfo->MVA; /* MVA address */
 	*len = buffer->size;
 
@@ -745,14 +794,14 @@ void ion_mm_heap_memory_detail(void)
 skip_client_entry:
 
 	ION_PRINT_LOG_OR_SEQ(NULL,
-			     "%s %8s %s %16s %10s %10s %10s %10s %32s\n",
+			     "%s %8s %s %16s %6s %10s %10s %10s %10s %32s\n",
 			     "buffer    ", "size",
-			     "pid(alloc_pid)", "comm(client)", "v1", "v2", "v3", "v4", "dbg_name");
+			     "pid(alloc_pid)", "comm(client)", "heapid", "v1", "v2", "v3", "v4", "dbg_name");
 
 	if (mutex_trylock(&dev->buffer_lock)) {
 		char seq_log[384];
 		int seq_log_count = 0;
-		char seq_fmt[] = "0x%p %10zu %5d(%5d) %16s %10u %10u %10u %10u %48s  ";
+		char seq_fmt[] = "0x%p %10zu %5d(%5d) %16s %6d %10u %10u %10u %10u %48s  ";
 
 		memset(seq_log, 0, 384);
 		for (n = rb_first(&dev->buffers); n; n = rb_next(n)) {
@@ -783,9 +832,9 @@ skip_client_entry:
 				seq_log_count++;
 				sprintf(seq_log + strlen(seq_log), seq_fmt,
 					buffer, buffer->size,
-					buffer->pid, bug_info->pid, buffer->task_comm,
+					buffer->pid, bug_info->pid, buffer->task_comm, buffer->heap->id,
 					pdbg->value1, pdbg->value2, pdbg->value3, pdbg->value4,
-					cam_heap ? "ion_camera_heap" : pdbg->dbg_name);
+					pdbg->dbg_name);
 
 				if ((seq_log_count % 2) == 0) {
 					ION_PRINT_LOG_OR_SEQ(NULL, "%s\n", seq_log);

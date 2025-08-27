@@ -15,10 +15,14 @@ CFLAGS_REMOVE_mutex-debug.o = -pg
 CFLAGS_REMOVE_rtmutex-debug.o = -pg
 endif
 
+ifeq ($(CONFIG_PROVE_LOCKING),y)
+ccflags-y += -DMTK_LOCK_DEBUG
+endif
+
 obj-$(CONFIG_DEBUG_MUTEXES) += mutex-debug.o
 obj-$(CONFIG_LOCKDEP) += lockdep.o
 ifeq ($(CONFIG_PROC_FS),y)
-obj-$(CONFIG_LOCKDEP) += lockdep_proc.o
+obj-$(CONFIG_LOCKDEP) += lockdep_proc.o lockdep_test.o
 endif
 obj-$(CONFIG_SMP) += spinlock.o
 obj-$(CONFIG_SMP) += lglock.o

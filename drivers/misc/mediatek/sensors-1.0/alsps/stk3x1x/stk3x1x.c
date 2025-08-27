@@ -136,6 +136,7 @@ static struct alsps_init_info stk3x1x_init_info = {
 };
 
 
+// 
 enum
 {
 	CMC_BIT_ALS	= 1,
@@ -251,6 +252,7 @@ struct stk3x1x_priv {
 	uint16_t ir_code;
 	uint16_t als_correct_factor;
 
+	// 
 	bool als_flush;
 	bool ps_flush;
 };
@@ -289,6 +291,7 @@ static int stk3x1x_read_ps(struct i2c_client *client, u16 *data);
 static int32_t stk3x1x_get_ir_value(struct stk3x1x_priv *obj);
 struct wake_lock ps_lock;
 
+// 
 static int stk3x1x_als_flush(void);
 static int stk3x1x_ps_flush(void);
 
@@ -366,6 +369,7 @@ int stk3x1x_hwmsen_read_block(struct i2c_client *client, u8 addr, u8 *data, u8 l
 	mutex_unlock(&STK3X1X_i2c_mutex);
 	if (err != 2) 
 	{
+		printk("BBox::UEC;8::27\n");
 		APS_LOG("i2c_transfer error: (%d %p %d) %d\n", addr, data, len, err);
 		err = -EIO;
 	}
@@ -518,6 +522,7 @@ int stk3x1x_read_als(struct i2c_client *client, u16 *data)
 	ret = stk3x1x_master_recv(client, STK_DATA1_ALS_REG, buf, 0x02);
 	if(ret < 0)
 	{
+		printk("BBox::UEC;8::72\n");
 		APS_DBG("error: %d\n", ret);
 		return -EFAULT;
 	}
@@ -623,6 +628,7 @@ int stk3x1x_read_id(struct i2c_client *client)
 	ret = stk3x1x_master_recv(client, STK_PDT_ID_REG, buf, 0x02);
 	if(ret < 0)
 	{
+		printk("BBox::UEC;8::73\n");
 		APS_DBG("error: %d\n", ret);
 		return -EFAULT;
 	}
@@ -665,6 +671,7 @@ int stk3x1x_read_ps(struct i2c_client *client, u16 *data)
 	ret = stk3x1x_master_recv(client, STK_DATA1_PS_REG, buf, 0x02);
 	if(ret < 0)
 	{
+		printk("BBox::UEC;8::75\n");
 		APS_DBG("error: %d\n", ret);
 		return -EFAULT;
 	}
@@ -3587,6 +3594,7 @@ static int ps_get_data(int* value, int* status)
 }
 
 
+// 
 static int stk3x1x_als_batch(int flag, int64_t samplingPeriodNs, int64_t maxBatchReportLatencyNs)
 {
 	int value = 0;
@@ -3817,6 +3825,7 @@ static int stk3x1x_i2c_probe(struct i2c_client *client, const struct i2c_device_
 		ps_ctl.is_report_input_direct = true;
 	}
 
+	// 
 	ps_ctl.batch = stk3x1x_ps_batch;
 	ps_ctl.flush = stk3x1x_ps_flush;
 
@@ -3879,6 +3888,7 @@ exit_init_failed:
 exit:
 	stk3x1x_i2c_client = NULL;
 	stk3x1x_init_flag = -1;
+	printk("BBox::UEC;8::35\n");
 	APS_ERR("%s: err = %d\n", __FUNCTION__, err);
 
 	return err;
@@ -3941,7 +3951,7 @@ static int __init stk3x1x_init(void)
 	
 	APS_FUN();
 
-	hw = f_get_alsps_dts_func(name, hw);
+	hw = fih_get_alsps_dts_func(name, hw);
 
 	if (!hw)
 		APS_ERR("get dts info fail\n");

@@ -28,10 +28,11 @@
 int wireless_charger_gpio_number = (168 | 0x80000000);
 #endif
 
+//drop 
 /*
 #if 1
 #include <mach/gpio_const.h>
-//modify by Jason. E1 GPIO_SWCHARGER_EN_PIN:gpio_80.
+//modify. E1 GPIO_SWCHARGER_EN_PIN:gpio_80.
 int bq24157_gpio_number   = ( GPIO80 | 0x80000000);  //GPIO_SWCHARGER_EN_PIN;
 int bq24157_gpio_off_mode = GPIO_MODE_GPIO;
 int bq24157_gpio_on_mode  = GPIO_MODE_GPIO;
@@ -179,6 +180,7 @@ static u32 charging_hw_init(void *data)
 	u32 status = STATUS_OK;
 	static bool charging_init_flag = KAL_FALSE;
 
+	//modify 
     /*
     mt_set_gpio_mode(bq24157_gpio_number,bq24157_gpio_on_mode);
     mt_set_gpio_dir(bq24157_gpio_number,bq24157_gpio_on_dir);
@@ -234,6 +236,7 @@ static u32 charging_enable(void *data)
 		if (mt_usb_is_device())
 #endif
     	{
+            //drop 
             /*
 	        mt_set_gpio_mode(bq24157_gpio_number,bq24157_gpio_off_mode);
 	        mt_set_gpio_dir(bq24157_gpio_number,bq24157_gpio_off_dir);
@@ -253,7 +256,7 @@ static u32 charging_set_cv_voltage(void *data)
 {
 	u32 status = STATUS_OK;
 	u16 register_value;
-// not use,Just wait.
+//add ,but not use,Just wait.
 #if 1
     u32 cv_value = *(u32 *) (data);
 
@@ -299,11 +302,11 @@ static u32 charging_set_current(void *data)
 	u32 current_value = *(u32 *) data;
 
 	//if (current_value <= CHARGE_CURRENT_350_00_MA) {
-	if (current_value <= CHARGE_CURRENT_400_00_MA) {//Jason.
+	if (current_value <= CHARGE_CURRENT_400_00_MA) {//
 		bq24157_set_io_level(1);
 	} else {
 		bq24157_set_io_level(0);
-	//modify by Jason for E1 volue of Rsense is 56mR
+	//modify for E1 volue of Rsense is 56mR
 	/*	array_size = GETARRAYNUM(bq24157_CS_VTH);
 		set_chr_current = bmt_find_closest_level(bq24157_CS_VTH, array_size, current_value);
 		register_value = bq24157_charging_parameter_to_value(bq24157_CS_VTH, array_size, set_chr_current);
@@ -326,7 +329,7 @@ static u32 charging_set_input_current(void *data)
 	u32 register_value;
 
 	//if (*(u32 *) data > CHARGE_CURRENT_500_00_MA) {
-	if (*(u32 *) data > CHARGE_CURRENT_800_00_MA) {
+	if (*(u32 *) data > CHARGE_CURRENT_800_00_MA) {//
 		register_value = 0x3;
 	} else {
 		array_size = GETARRAYNUM(bq24157_INPUT_CS_VTH);
@@ -602,7 +605,7 @@ static u32(*const charging_func[CHARGING_CMD_NUMBER]) (void *data) = {
 s32 bq24157_chr_control_interface(CHARGING_CTRL_CMD cmd, void *data)
 {
 	s32 status;
-
+//Add
 #if 0
 	if (cmd < CHARGING_CMD_NUMBER)
 		status = charging_func[cmd] (data);
@@ -615,6 +618,6 @@ s32 bq24157_chr_control_interface(CHARGING_CTRL_CMD cmd, void *data)
 		battery_log(BAT_LOG_CRTI, "%s: hw bq24157 interface Error(%d)\n", __FUNCTION__, cmd);
 		return STATUS_UNSUPPORTED;
 	}
-
+//end.
 	return status;
 }

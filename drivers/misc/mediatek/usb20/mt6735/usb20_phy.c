@@ -323,7 +323,7 @@ static void hs_slew_rate_cal(void)
 	USBPHY_CLR8(0xf00 - 0x800 + 0x03, 0x01);
 	USBPHY_CLR8(0xf00 - 0x800 + 0x11, 0x01);
 
-	// After HW Confirm, Modify for USB Driver Capacity, 0309
+	//After HW Confirm, Modify for USB Driver Capacity, 0309
 	/* 4 s9: */
 #define MSK_RG_USB20_HSTX_SRCTRL 0x7
 	/* all clr first then set */

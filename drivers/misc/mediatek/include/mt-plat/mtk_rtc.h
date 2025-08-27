@@ -56,14 +56,20 @@ extern void rtc_bbpu_power_down(void);
 extern void rtc_read_pwron_alarm(struct rtc_wkalrm *alm);
 extern int get_rtc_spare_fg_value(void);
 extern int set_rtc_spare_fg_value(int val);
-
-//Add for RTC Vbat 
-extern int get_rtc_spare_vbat_value(void);
-extern int set_rtc_spare_vbat_value(int val);
-
 extern void rtc_irq_handler(void);
 extern bool crystal_exist_status(void);
 extern void mt_power_off(void);
+
+/*Begin, for reboot condition, 20190104*/
+extern void rtc_mark_ftm(void);
+extern void rtc_mark_meta(void);
+extern void rtc_mark_ramtest(void);			/**/
+extern void rtc_mark_preloader(void);
+
+extern int get_rtc_spare_vbat_value(void);
+extern int set_rtc_spare_vbat_value(int val);
+/*End, for reboot condition, 20190104*/
+
 #else/*ifdef CONFIG_MTK_RTC*/
 #define rtc_read_hw_time()              ({ 0; })
 #define rtc_gpio_enable_32k(user)	do {} while (0)

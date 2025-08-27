@@ -30,8 +30,9 @@
 
 	/* chosen */
 	chosen: chosen {
-		bootargs = "console=tty0 console=ttyMT0,921600n1 root=/dev/ram \
-initrd=0x44000000,0x300000 loglevel=8 androidboot.hardware=mt6735";
+		bootargs = "console=tty0 console=ttyMT3,921600n1 vmalloc=496M \
+androidboot.hardware=mt6735 slub_max_order=0 slub_debug=OFZPU \
+firmware_class.path=/vendor/firmware";
 	};
 
 	/* Do not put any bus before mtk-msdc, because it should be mtk-msdc.0 for partition device node usage */
@@ -108,6 +109,9 @@ initrd=0x44000000,0x300000 loglevel=8 androidboot.hardware=mt6735";
 	compatible = "microtrust,utos";
 	interrupts = <GIC_SPI 252 IRQ_TYPE_EDGE_RISING>,
 		<GIC_SPI 253 IRQ_TYPE_EDGE_RISING>;
+	};
+	utos_tester {
+		compatible = "microtrust,tester-v1";
 	};
 
 	cpus: cpus {
@@ -280,6 +284,15 @@ initrd=0x44000000,0x300000 loglevel=8 androidboot.hardware=mt6735";
 			size = <0 0x100000>;
 			alignment = <0 0x200000>;
 		};
+
+#ifdef CONFIG_MICROTRUST_TEE_SUPPORT
+		soter-shared-mem {
+			compatible = "microtrust,shared_mem";
+			no-map;
+			size = <0 0x200000>;
+			alloc-ranges = <0 0x40000000 0 0x50000000>;
+		};
+#endif
 
 		spm-reserve-memory {
 			compatible = "mediatek,spm-reserve-memory";

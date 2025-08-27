@@ -336,11 +336,7 @@ enum {
 /* Idle handler on/off */
 static int idle_switch[NR_TYPES] = {
 	1,  /* dpidle switch */
-#if defined(CONFIG_MTK_DISABLE_SODI)
 	0,  /* soidle switch */
-#else
-	1,  /* soidle switch */
-#endif
 	1,  /* slidle switch */
 	1,  /* rgidle switch */
 };
@@ -387,11 +383,7 @@ static unsigned int slidle_condition_mask[NR_GRPS] = {
 /* Idle handler on/off */
 static int idle_switch[NR_TYPES] = {
 	1,  /* dpidle switch */
-#if defined(CONFIG_MTK_DISABLE_SODI)
 	0,  /* soidle switch */
-#else
-	1,  /* soidle switch */
-#endif
 	1,  /* slidle switch */
 	1,  /* rgidle switch */
 };
@@ -437,11 +429,7 @@ static unsigned int slidle_condition_mask[NR_GRPS] = {
 #elif defined(CONFIG_ARCH_MT6753)
 static int idle_switch[NR_TYPES] = {
 	1,  /* dpidle switch */
-#if defined(CONFIG_MTK_DISABLE_SODI)
 	0,  /* soidle switch */
-#else
-	1,  /* soidle switch */
-#endif
 	1,  /* slidle switch */
 	1,  /* rgidle switch */
 };
@@ -487,8 +475,8 @@ static unsigned int slidle_condition_mask[NR_GRPS] = {
 #elif defined(CONFIG_ARCH_MT6570)
 /*Idle handler on/off*/
 static int idle_switch[NR_TYPES] = {
-	0,  /* dpidle switch */
-	0,  /* soidle switch */
+	1,  /* dpidle switch */
+	1,  /* soidle switch */
 	0,  /* slidle switch */
 	1,  /* rgidle switch */
 };
@@ -1178,6 +1166,11 @@ static bool soidle_can_enter(int cpu)
 			idle_warn("SODI: blocking by uptime count = %d\n", sodi_by_uptime_count);
 			sodi_by_uptime_count = -1;
 		}
+	}
+
+	if (sodi_forbid_by_prev_wakeup_info()) {
+		reason = BY_OTH;
+		goto out;
 	}
 
 out:
@@ -2342,8 +2335,10 @@ static ssize_t slidle_state_read(struct file *filp, char __user *userbuf, size_t
 	return simple_read_from_buffer(userbuf, count, f_pos, dbg_buf, len);
 }
 
-static ssize_t slidle_state_write(struct file *filp, const char __user *userbuf,
-									size_t count, loff_t *f_pos)
+static ssize_t slidle_state_write(struct file *filp,
+									const char __user *userbuf,
+									size_t count,
+									loff_t *f_pos)
 {
 	char cmd[32];
 	int param;
@@ -2358,7 +2353,7 @@ static ssize_t slidle_state_write(struct file *filp, const char __user *userbuf,
 
 	cmd_buf[count] = '\0';
 
-	if (sscanf(userbuf, "%31s %d", cmd, &param) == 2) {
+	if (sscanf(cmd_buf, "%31s %d", cmd, &param) == 2) {
 		if (!strcmp(cmd, "slidle"))
 			idle_switch[IDLE_TYPE_SL] = param;
 		else if (!strcmp(cmd, "enable"))

@@ -99,19 +99,20 @@ usb_acm_temp_device,
 };*/
 #endif
 
+//rt9458 OTG
+extern int set_chr_enable_otg(unsigned int enable);
+#ifdef CONFIG_MTK_BQ24157_SUPPORT
+extern void bq24157_set_opa_mode(unsigned int val);
+extern void bq24157_set_otg_pl(unsigned int val);
+extern void bq24157_set_otg_en(unsigned int val);
+extern unsigned int bq24157_reg_config_interface(unsigned char RegNum, unsigned char val);
+#endif
 /* switch charger API*/
 #ifdef CONFIG_MTK_FAN5405_SUPPORT
 extern void fan5405_set_opa_mode(unsigned int val);
 extern void fan5405_set_otg_pl(unsigned int val);
 extern void fan5405_set_otg_en(unsigned int val);
 extern unsigned int fan5405_reg_config_interface(unsigned char RegNum, unsigned char val);
-#elif defined(CONFIG_MTK_BQ24157_SUPPORT)
-extern void bq24157_set_opa_mode(unsigned int val);
-extern void bq24157_set_otg_pl(unsigned int val);
-extern void bq24157_set_otg_en(unsigned int val);
-extern unsigned int bq24157_reg_config_interface(unsigned char RegNum, unsigned char val);
-// rt9458 OTG
-extern int set_chr_enable_otg(unsigned int enable);
 #elif defined(CONFIG_MTK_BQ24261_SUPPORT)
 extern void bq24261_set_en_boost(unsigned int val);
 #elif defined(CONFIG_MTK_BQ24296_SUPPORT)
@@ -141,9 +142,5 @@ extern int usb20_phy_init_debugfs(void);
 extern CHARGER_TYPE mt_get_charger_type(void);
 #include <upmu_common.h>
 bool hwPowerOn(MT65XX_POWER powerId, int powerVolt, char *mode_name);
-
-// sometimes value of SOC is 50%.
-extern void wake_up_bat3(void);
-//end.50%
 
 #endif

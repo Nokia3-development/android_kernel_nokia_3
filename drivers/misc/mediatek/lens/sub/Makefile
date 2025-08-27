@@ -37,4 +37,4 @@ subaf-y  += common/lc898214af/LC898214AF.o
 subaf-y  += common/ad5820af/AD5820AF.o
 subaf-y  += common/wv511aaf/WV511AAF.o
 subaf-y  += common/ak7371af/AK7371AF.o
-subaf-y  += common/gt9762af/GT9762AF.o
+subaf-$(CONFIG_MTK_LENS_GT9762AF_SUPPORT)  += common/gt9762af/GT9762AF.o

@@ -26,10 +26,13 @@
 //#define CONFIG_BMA255_LOWPASS
 #define SW_CALIBRATION
 
+extern u16 fih_hwid;
+
 
 #define GSENSOR_CALI
 
 #ifdef GSENSOR_CALI
+/* add gsensor calibration for alex 20141205 begin*/
 #define LIBHWM_GRAVITY_EARTH            (9.80665f)  
 
 
@@ -56,6 +59,15 @@ struct manuf_gsensor_cali
 
 //static int flag = 1;
 
+extern int fih_read_gsensor_cali(struct manuf_gsensor_cali *p);
+extern int fih_write_gsensor_cali(struct manuf_gsensor_cali *p);
+
+
+extern  int gsen_cali_x;
+extern  int gsen_cali_y;
+extern  int gsen_cali_z;
+
+/* add gsensor calibration for alex 20141205 end*/
 #endif
 
 
@@ -177,7 +189,82 @@ static struct data_resolution bma255_offset_resolution = {{ 1, 95}, 512};
 
 static DEFINE_MUTEX(bma150_i2c_mutex);
 
-static int bma_i2c_read_block(struct i2c_client *client, u8 addr, u8 *data, u8 len)
+
+/* I2C operation functions */
+#if 0
+static int bma_i2c_dma_read(struct i2c_client *client, unsigned char regaddr, unsigned char *readbuf, int readlen)
+{
+#if 0
+    int ret=0;
+	if(readlen > DMA_BUFFER_SIZE)
+	{
+		GSE_ERR("Read length cann't exceed dma buffer size!\n");
+		return -EINVAL;
+	}
+    mutex_lock(&i2c_lock);
+	//write the register address
+	ret= i2c_master_send(client, &regaddr, 1);
+	if (ret < 0) {
+		GSE_ERR("send command error!!\n");
+		return -EFAULT;
+	}
+	//dma read 
+	client->addr = client->addr & I2C_MASK_FLAG | I2C_DMA_FLAG;
+	ret = i2c_master_recv(client, I2CDMABuf_pa, readlen);
+	//clear DMA flag once transfer done
+	client->addr = client->addr & I2C_MASK_FLAG & (~ I2C_DMA_FLAG); //client->ext_flag = client->ext_flag & (~I2C_DMA_FLAG);
+	if (ret < 0) {
+		GSE_ERR("dma receive data error!!\n");
+		return -EFAULT;
+	}
+	memcpy(readbuf, I2CDMABuf_va, readlen);
+	mutex_unlock(&i2c_lock);
+	return ret;
+#endif
+    int ret;
+    s32 retry = 0;
+    u8 buffer[2];
+    struct i2c_msg msg[2] =
+    {
+        {
+            .addr = (client->addr & I2C_MASK_FLAG),
+            .flags = 0,//(client->ext_flag | I2C_ENEXT_FLAG | I2C_DMA_FLAG),
+            .buf = buffer,
+            .len = 1,
+            //.timing = I2C_MASTER_CLOCK
+        },
+        {
+            .addr = (client->addr & I2C_MASK_FLAG),
+            .ext_flag = (client->ext_flag | I2C_ENEXT_FLAG | I2C_DMA_FLAG),
+            .flags = I2C_M_RD,
+            .buf = I2CDMABuf_pa,
+            .len = readlen,
+            //.timing = I2C_MASTER_CLOCK
+        },
+    };
+
+    buffer[0] = regaddr;
+    if (readbuf == NULL)
+        return -1;
+
+    for (retry = 0; retry < 10; ++retry)
+    {
+        ret = i2c_transfer(client->adapter, &msg[0], 2);
+        if (ret < 0)
+        {
+            GSE_ERR("I2C DMA read error retry=%d", retry);
+            continue;
+        }
+        memcpy(readbuf, I2CDMABuf_va, readlen);
+        return 0;
+    }
+    GSE_ERR("Dma I2C Read Error: 0x%04X, %d byte(s), err-code: %d", regaddr, readlen, ret);
+    return ret;
+}
+#endif
+
+static int bma_i2c_read_block(struct i2c_client *client,
+			u8 addr, u8 *data, u8 len)
 {
 	int err;
 	u8 beg = addr;
@@ -204,6 +291,7 @@ static int bma_i2c_read_block(struct i2c_client *client, u8 addr, u8 *data, u8 l
     else if (len > C_I2C_FIFO_SIZE) 
 	{   
 	    mutex_unlock(&bma150_i2c_mutex);
+		printk("BBox::UEC;8::0\n");
 		GSE_ERR(" length %d exceeds %d\n", len, C_I2C_FIFO_SIZE);
 		return -EINVAL;
 	}
@@ -221,7 +309,8 @@ static int bma_i2c_read_block(struct i2c_client *client, u8 addr, u8 *data, u8 l
 	return err;
 }
 
-static int bma_i2c_write_block(struct i2c_client *client, u8 addr, u8 *data, u8 len)
+static int bma_i2c_write_block(struct i2c_client *client, u8 addr,
+			u8 *data, u8 len)
 {
 	/*
 	*because address also occupies one byte,
@@ -284,6 +373,7 @@ static int BMA255_ReadData(struct i2c_client *client, s16 data[BMA255_AXES_NUM])
 	err = bma_i2c_read_block(client, addr, buf, BMA255_DATA_LEN);
 	if(err)
 	{
+		printk("BBox::UEC;8::63\n");
 		GSE_ERR("error: %d\n", err);
 	}
 	else
@@ -535,7 +625,7 @@ static int BMA255_CheckDeviceID(struct i2c_client *client)
 	res = bma_i2c_read_block(client, BMA255_REG_DEVID, databuf, 0x01);
 	if(res < 0)
 		goto exit_BMA255_CheckDeviceID;
-
+	printk("BBox::UPD;77::%d\n", databuf[0]);
 	if(databuf[0] != BMA255_FIXED_DEVID)
 	{
 		GSE_LOG("BMA255_CheckDeviceID %d failed.\n ", databuf[0]);
@@ -550,6 +640,7 @@ exit_BMA255_CheckDeviceID:
 
 	if (res < 0)
 	{
+		printk("BBox::UEC;8::64\n");
 		return BMA255_ERR_I2C;
 	}
 
@@ -704,7 +795,7 @@ static int BMA255_SetPowerMode(struct i2c_client *client, bool enable)
 	sensor_power = enable;
 	mutex_unlock(&obj->lock);
 
-	mdelay(20);
+	mdelay(20);    //add by alex
 
  	return BMA255_SUCCESS;    
 }
@@ -1262,82 +1353,102 @@ static int bma255_get_fifo_framecount(struct i2c_client *client, unsigned char *
 
 
 #ifdef GSENSOR_CALI
-/* add gsensor calibration 20141205 begin*/
+/* add gsensor calibration for alex 20141205 begin*/
 int bma150_gsensor_calibration(void)
 {
-	struct i2c_client *client = bma255_i2c_client;
-	struct bma255_i2c_data *obj;
-	struct manuf_gsensor_cali temp;
-	char strbuf[BMA255_BUFSIZE];
-	int data[3] = {0,0,0};
-	int avg[3] = {0,0,0}; 
-	int cali[3]= {0,0,0};
-	int golden_x = 0;
-	int golden_y = 0;
-	int golden_z = 9800;   // g=9.8
-	int cali_last[3] = {0,0,0} ;
-	int err = -1, num = 0, count = 5;
+ struct i2c_client *client = bma255_i2c_client;
+ struct bma255_i2c_data *obj;
+ struct manuf_gsensor_cali temp;
+ char strbuf[BMA255_BUFSIZE];
+ int data[3] = {0,0,0};
+ int avg[3] = {0,0,0}; 
+ int cali[3]= {0,0,0};
+ int golden_x = 0;
+ int golden_y = 0;
+ int golden_z = 9800;   // g=9.8
+ int cali_last[3] = {0,0,0} ;
+ int err = -1, num = 0, count = 5;
 
-	GSE_ERR("Gsensor cali begin");
+ 
+ 
+ GSE_ERR("Gsensor cali begin");
 
-	if(NULL == client)
+
+ if(NULL == client)
+ {
+	 GSE_ERR("i2c client is null!!\n");
+	 return 0;
+ }
+
+ obj = i2c_get_clientdata(client);
+
+GSE_ERR("Gsensor cali begin ----------");
+
+
+while(num < count)
+{
+
+    
+	mdelay(20);
+
+	/* read gsensor data */
+	err = BMA255_ReadSensorData(client, strbuf, BMA255_BUFSIZE);
+
+	if(err)
 	{
-		GSE_ERR("i2c client is null!!\n");
+		GSE_ERR("read data fail: %d\n", err);
 		return 0;
 	}
-
-	obj = i2c_get_clientdata(client);
-
-	GSE_ERR("Gsensor cali begin ----------");
-
-	while(num < count)
-	{
-		mdelay(20);
-
-		/* read gsensor data */
-		err = BMA255_ReadSensorData(client, strbuf, BMA255_BUFSIZE);
-
-		if(err)
-		{
-			GSE_ERR("read data fail: %d\n", err);
-			return 0;
-		}
-
+	
 		sscanf(strbuf, "%x %x %x", &data[BMA255_AXIS_X],&data[BMA255_AXIS_Y],&data[BMA255_AXIS_Z]);
 
-		GSE_ERR("Gsensor  data = %d %d %d\n",data[BMA255_AXIS_X],data[BMA255_AXIS_Y],data[BMA255_AXIS_Z]);
+		GSE_ERR("Gsensor  data ---alex--- = %d %d %d\n",data[BMA255_AXIS_X],data[BMA255_AXIS_Y],data[BMA255_AXIS_Z]);
 
 		avg[BMA255_AXIS_X] = data[BMA255_AXIS_X] + avg[BMA255_AXIS_X] ;
 		avg[BMA255_AXIS_Y] = data[BMA255_AXIS_Y] + avg[BMA255_AXIS_Y];
 		avg[BMA255_AXIS_Z] = data[BMA255_AXIS_Z] + avg[BMA255_AXIS_Z];
-
-		GSE_ERR("Gsensor sum data = %d %d %d %d\n",avg[BMA255_AXIS_X],avg[BMA255_AXIS_Y],avg[BMA255_AXIS_Z],num);
+		
+		GSE_ERR("Gsensor sum data ----alex---- = %d %d %d %d\n",avg[BMA255_AXIS_X],avg[BMA255_AXIS_Y],avg[BMA255_AXIS_Z],num);
 		num++;
-	}
-
-	avg[BMA255_AXIS_X]/=count;
-	avg[BMA255_AXIS_Y]/=count;
-	avg[BMA255_AXIS_Z]/=count;
-
-	cali[BMA255_AXIS_X] = golden_x - avg[BMA255_AXIS_X];
-	cali[BMA255_AXIS_Y] = golden_y - avg[BMA255_AXIS_Y];
-	cali[BMA255_AXIS_Z] = golden_z - avg[BMA255_AXIS_Z];
-	GSE_ERR("Gsensor cali data 1111= %d %d %d\n",cali[BMA255_AXIS_X],cali[BMA255_AXIS_Y],cali[BMA255_AXIS_Z]);
-
-	cali_last[0] = cali[BMA255_AXIS_X]* obj->reso->sensitivity / GRAVITY_EARTH_1000;
-	cali_last[1] = cali[BMA255_AXIS_Y]* obj->reso->sensitivity / GRAVITY_EARTH_1000;
-	cali_last[2] = cali[BMA255_AXIS_Z]* obj->reso->sensitivity / GRAVITY_EARTH_1000;
-	GSE_ERR("Gsensor cali data  22222 = %d %d %d\n",cali_last[0],cali_last[1],cali_last[2]);
-
-	err = BMA255_WriteCalibration(client, cali_last);
-
-	temp.cali_x= obj->cali_sw[BMA255_AXIS_X];
-	temp.cali_y= obj->cali_sw[BMA255_AXIS_Y];
-	temp.cali_z= obj->cali_sw[BMA255_AXIS_Z];
-
-	return 1;
+	
 }
-/* add gsensor calibration 20141205 end*/
+
+avg[BMA255_AXIS_X]/=count;
+avg[BMA255_AXIS_Y]/=count;
+avg[BMA255_AXIS_Z]/=count;
+
+cali[BMA255_AXIS_X] = golden_x - avg[BMA255_AXIS_X];
+cali[BMA255_AXIS_Y] = golden_y - avg[BMA255_AXIS_Y];
+cali[BMA255_AXIS_Z] = golden_z - avg[BMA255_AXIS_Z];
+GSE_ERR("Gsensor cali data 1111= %d %d %d\n",cali[BMA255_AXIS_X],cali[BMA255_AXIS_Y],cali[BMA255_AXIS_Z]);
+
+
+
+cali_last[0] = cali[BMA255_AXIS_X]* obj->reso->sensitivity / GRAVITY_EARTH_1000;
+cali_last[1] = cali[BMA255_AXIS_Y]* obj->reso->sensitivity / GRAVITY_EARTH_1000;
+cali_last[2] = cali[BMA255_AXIS_Z]* obj->reso->sensitivity / GRAVITY_EARTH_1000;
+GSE_ERR("Gsensor cali data  22222 = %d %d %d\n",cali_last[0],cali_last[1],cali_last[2]);
+
+err= BMA255_WriteCalibration(client, cali_last);
+
+temp.cali_x= obj->cali_sw[BMA255_AXIS_X];
+temp.cali_y= obj->cali_sw[BMA255_AXIS_Y];
+temp.cali_z= obj->cali_sw[BMA255_AXIS_Z];
+
+
+gsen_cali_x = obj->cali_sw[BMA255_AXIS_X];
+gsen_cali_y	= obj->cali_sw[BMA255_AXIS_Y];
+gsen_cali_z = obj->cali_sw[BMA255_AXIS_Z];
+
+
+err = fih_write_gsensor_cali(&temp);
+
+
+return err;
+
+}
+
+/* add gsensor calibration for alex 20141205 end*/
 #endif
 
 static ssize_t show_chipinfo_value(struct device_driver *ddri, char *buf)
@@ -1579,22 +1690,27 @@ static ssize_t store_cali_value(struct device_driver *ddri, const char *buf, siz
 	struct i2c_client *client = bma255_i2c_client;  
 	int value = 0;
 
-	if(NULL == client)
-	{
-		GSE_ERR("i2c client is null!!\n");
-		return 0;
-	}
-	else if(1 != sscanf(buf, "%x", &value))
-	{
-		GSE_ERR("invalid format: '%s'\n", buf);
-		return 0;
-	}
-
-	if(value == 1)
-	{
+		if(NULL == client)
+		{
+			GSE_ERR("i2c client is null!!\n");
+			return 0;
+		}
+		else if(1 != sscanf(buf, "%x", &value))
+		{
+			GSE_ERR("invalid format: '%s'\n", buf);
+			return 0;
+		}
+	
+			if(value == 1)
+			{
+		
 		GSE_ERR("bma150_gsensor_calibration begin!!\n");
-		bma150_gsensor_calibration();
-	}
+			bma150_gsensor_calibration();
+				}
+
+
+
+
 		
 	return count;
 }
@@ -1806,7 +1922,21 @@ static ssize_t show_fifo_data_out_frame_value(struct device_driver *ddri, char *
     s16 X_tmp = 0;
     s16 Y_tmp = 0;
     s16 Z_tmp = 0;
+   
 	
+#if 0
+   int res = 0;  
+   struct i2c_client *client = bma255_i2c_client;
+   
+	if(sensor_power == false)
+	{
+		res = BMA255_SetPowerMode(client, true);
+		if(res)
+		{
+			GSE_ERR("Power on bma255 error %d!\n", res);
+		}
+	}
+#endif	
     err = bma255_get_fifo_framecount(bma255_i2c_client, &fifo_frame_cnt);
 	if (err < 0)
 	{
@@ -1817,10 +1947,9 @@ static ssize_t show_fifo_data_out_frame_value(struct device_driver *ddri, char *
 		GSE_ERR("fifo frame count is 0!!!");
 		return 0;
 	}
-
+#if 1 
 	read_cnt = fifo_frame_cnt;
 	pBuf = &tmp_buf[0];
-
 	while (read_cnt > 0)
 	{
 		err = bma_i2c_read_block(bma255_i2c_client, BMA255_FIFO_DATA_OUTPUT_REG, pBuf, f_len);
@@ -1830,36 +1959,80 @@ static ssize_t show_fifo_data_out_frame_value(struct device_driver *ddri, char *
 			return sprintf(buf, "Read byte block error.\n");
 		}
 
-		// add for acc calibration        
+
+      //alex add for acc calibration        
         X_tmp = pBuf[0] | (pBuf[1] << 8);
         X_tmp >>= 4;
-		X_tmp = X_tmp;
+		X_tmp = X_tmp + gsen_cali_x;
 		pBuf[0]= (X_tmp&0xF)<<4;
 		pBuf[1] = (X_tmp&0xFF0)>>4;
         
 		Y_tmp = pBuf[2] | (pBuf[3] << 8);
         Y_tmp >>= 4;
-		Y_tmp = Y_tmp; 
+		Y_tmp = Y_tmp + gsen_cali_y; 
         pBuf[2]= (Y_tmp&0xF)<<4;
 		pBuf[3] = (Y_tmp&0xFF0)>>4;
 		
 		Z_tmp = pBuf[4] | (pBuf[5] << 8);
         Z_tmp >>= 4;
-		Z_tmp = Z_tmp;
+		Z_tmp = Z_tmp + gsen_cali_z;
 		pBuf[4]= (Z_tmp&0xF)<<4;
 		pBuf[5] = (Z_tmp&0xFF0)>>4;
-		//end
+		//end alex
 		
 		pBuf += f_len;
 		read_cnt--;
-
 		//mdelay(1);
         //GSE_ERR("fifo_frame_cnt = %d, f_len = %d", fifo_frame_cnt, f_len);
 	}
 	memcpy (buf, tmp_buf, fifo_frame_cnt * f_len);
-
+#else
+	if (bma_i2c_dma_read(bma255_i2c_client, BMA255_FIFO_DATA_OUTPUT_REG, buf,
+		fifo_frame_cnt * f_len) < 0)
+	{
+		GSE_ERR("[a]fatal error\n");
+		return sprintf(buf, "Read byte block error\n");
+	}
+#endif
 	return fifo_frame_cnt * f_len;
 }
+
+
+
+#ifdef GSENSOR_CALI
+
+
+static ssize_t show_gcalidata(struct device_driver *ddri, char *buf)
+	{
+		struct bma255_i2c_data *obj = obj_i2c_data;
+		//struct manuf_gsensor_cali temp;
+        //int err;
+		
+		if (obj == NULL)
+		{
+			GSE_ERR("i2c_data obj is null!!\n");
+			return 0;
+		}
+
+		#if 0
+		err = fih_read_gsensor_cali(&temp); 
+		
+			if(err == 1)
+			{
+			 obj->cali_sw[0] = temp.cali_x;
+			 obj->cali_sw[1] = temp.cali_y;
+			 obj->cali_sw[2] = temp.cali_z;
+			 GSE_ERR(" show_gcalidata %d %d %d %d \n",obj->cali_sw[0],obj->cali_sw[1],obj->cali_sw[2],err);
+		
+			}
+		#endif	
+			
+	return snprintf(buf, PAGE_SIZE, "%d %d %d\n",gsen_cali_x, gsen_cali_y,gsen_cali_z);
+		
+	}
+
+
+#endif
 
 
 static DRIVER_ATTR(chipinfo,   S_IWUSR | S_IRUGO, show_chipinfo_value,      NULL);
@@ -1876,6 +2049,7 @@ static DRIVER_ATTR(powerstatus,               S_IRUGO, show_power_status_value, 
 static DRIVER_ATTR(fifo_mode, S_IWUSR | S_IRUGO, show_fifo_mode_value,    store_fifo_mode_value);
 static DRIVER_ATTR(fifo_framecount, S_IWUSR | S_IRUGO, show_fifo_framecount_value,    store_fifo_framecount_value);
 static DRIVER_ATTR(fifo_data_frame, S_IRUGO, show_fifo_data_out_frame_value,    NULL);
+static DRIVER_ATTR(gcalidata,               S_IRUGO, show_gcalidata,        NULL);
 
 
 static struct driver_attribute *bma255_attr_list[] = {
@@ -1893,6 +2067,7 @@ static struct driver_attribute *bma255_attr_list[] = {
 	&driver_attr_fifo_mode,
 	&driver_attr_fifo_framecount,
 	&driver_attr_fifo_data_frame,
+	&driver_attr_gcalidata,
 };
 
 static int bma255_create_attr(struct device_driver *driver) 
@@ -2291,6 +2466,7 @@ static int bma255_get_data(int* x ,int* y,int* z, int* status)
 	return 0;
 }
 
+// 
 static int bma150_acc_batch(int flag, int64_t samplingPeriodNs, int64_t maxBatchReportLatencyNs)
 {
     return bma255_set_delay((u64)samplingPeriodNs);
@@ -2323,6 +2499,11 @@ static int bma255_i2c_probe(struct i2c_client *client, const struct i2c_device_i
 
 	obj->hw = hw;
 
+	if ((fih_hwid < 0x122))
+	{
+		obj->hw->direction = 4;	 
+	}
+
 	err = hwmsen_get_convert(obj->hw->direction, &obj->cvt);
 	if(err)
 	{
@@ -2335,9 +2516,24 @@ static int bma255_i2c_probe(struct i2c_client *client, const struct i2c_device_i
 	new_client = obj->client;
 	i2c_set_clientdata(new_client, obj);
 
-    obj->cali_sw[BMA255_AXIS_X] = 0;
-	obj->cali_sw[BMA255_AXIS_Y] = 0;	
-	obj->cali_sw[BMA255_AXIS_Z] = 0;
+    obj->cali_sw[BMA255_AXIS_X] = gsen_cali_x;
+	obj->cali_sw[BMA255_AXIS_Y] = gsen_cali_y;	
+	obj->cali_sw[BMA255_AXIS_Z] = gsen_cali_z;
+
+	
+	GSE_LOG("sensor ofset = %d %d %d \n", obj->cali_sw[BMA255_AXIS_X],
+		obj->cali_sw[BMA255_AXIS_Y], obj->cali_sw[BMA255_AXIS_Z]);	
+
+#if 0 
+	//allocate DMA buffer
+	I2CDMABuf_va = (u8 *)dma_alloc_coherent(NULL, DMA_BUFFER_SIZE, &I2CDMABuf_pa, GFP_KERNEL);
+	if(I2CDMABuf_va == NULL)
+	{
+		err = -ENOMEM;
+		GSE_ERR("Allocate DMA I2C Buffer failed! error = %d\n", err);	
+		//goto exit_dma_alloc_failed;
+	}
+#endif
 
 	atomic_set(&obj->trace, 0);
 	atomic_set(&obj->suspend, 0);
@@ -2388,6 +2584,7 @@ static int bma255_i2c_probe(struct i2c_client *client, const struct i2c_device_i
 	ctl.set_delay  = bma255_set_delay;
 	ctl.is_report_input_direct = false;
 
+	// 
 	ctl.batch = bma150_acc_batch;
 	ctl.flush = bma150_acc_flush;
 	//ctl.is_use_common_factory = false;
@@ -2434,6 +2631,7 @@ exit_kfree:
 	kfree(obj);
 
 exit:
+	printk("BBox::UEC;8::8\n");
 	GSE_ERR("%s: err = %d\n", __func__, err);
 	bma255_init_flag = -1;
 
@@ -2510,7 +2708,7 @@ static int __init bma255_init(void)
 {
 	GSE_FUN();
 
-	hw = f_get_accel_dts_func(COMPATIABLE_NAME, hw);
+	hw = fih_get_accel_dts_func(COMPATIABLE_NAME, hw);
 
 	if (!hw)
 		GSE_ERR("get dts info fail\n");

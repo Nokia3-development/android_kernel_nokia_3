@@ -2058,6 +2058,9 @@ bool SetI2SADDAEnable(bool bEnable)
 		    && mAudioMEMIF[Soc_Aud_Digital_Block_I2S_IN_ADC]->mState == false) {
 			Afe_Set_Reg(AFE_ADDA_UL_DL_CON0, bEnable, 0x0001);
 		}
+
+		/* should delayed 1/fs(smallest is 8k) = 125us before afe off */
+		usleep_range(125, 150);
 	}
 
 	return true;
@@ -2152,8 +2155,6 @@ static bool SetIrqMcuSampleRate(uint32 Irqmode, uint32 SampleRate)
 {
 	uint32 SRIdx = SampleRateTransform(SampleRate);
 
-	pr_debug("%s(), Irqmode %d, SampleRate %d\n",
-		 __func__, Irqmode, SampleRate);
 	switch (Irqmode) {
 	case Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE:
 		Afe_Set_Reg(AFE_IRQ_MCU_CON, SRIdx << 4, 0xf << 4);
@@ -2176,7 +2177,6 @@ static bool SetIrqMcuSampleRate(uint32 Irqmode, uint32 SampleRate)
 
 static bool SetIrqMcuCounter(uint32 Irqmode, uint32 Counter)
 {
-	pr_debug("%s(), Irqmode %d, Counter %d\n", __func__, Irqmode, Counter);
 	switch (Irqmode) {
 	case Soc_Aud_IRQ_MCU_MODE_IRQ1_MCU_MODE:
 		Afe_Set_Reg(AFE_IRQ_MCU_CNT1, Counter, 0xffffffff);
@@ -3836,12 +3836,18 @@ void AudDrv_checkDLISRStatus(void)
 		}
 		if (localctl.u4UnderflowCnt) {
 			for (index = 0; index < localctl.u4UnderflowCnt && index < DL_ABNORMAL_CONTROL_MAX; index++) {
-				pr_warn("AudWarn data underflow [%d/%d] MemType %d, Remain:0x%x, R:0x%x,W:0x%x, BufSize:0x%x, consumebyte:0x%x, hw index:0x%x, addr:0x%x\n",
+				MTK_SND_LOG_LIMIT(20,
+					"AudWarn data underflow [%d/%d] MemType %d, Remain:0x%x, R:0x%x,W:0x%x, BufSize:0x%x, consumebyte:0x%x, hw index:0x%x, addr:0x%x\n",
 					index,
-				localctl.u4UnderflowCnt, localctl.MemIfNum[index], localctl.u4DataRemained[index],
-				localctl.u4DMAReadIdx[index], localctl.u4WriteIdx[index], localctl.u4BufferSize[index],
-				localctl.u4ConsumedBytes[index], localctl.u4HwMemoryIndex[index],
-				localctl.pucPhysBufAddr[index]);
+					localctl.u4UnderflowCnt,
+					localctl.MemIfNum[index],
+					localctl.u4DataRemained[index],
+					localctl.u4DMAReadIdx[index],
+					localctl.u4WriteIdx[index],
+					localctl.u4BufferSize[index],
+					localctl.u4ConsumedBytes[index],
+					localctl.u4HwMemoryIndex[index],
+					localctl.pucPhysBufAddr[index]);
 			}
 		}
 	}
@@ -4041,8 +4047,6 @@ int irq_add_user(const void *_user,
 	struct irq_user *ptr;
 
 	spin_lock_irqsave(&afe_control_lock, flags);
-	pr_debug("%s(), user %p, irq %d, rate %d, count %d\n",
-		 __func__, _user, _irq, _rate, _count);
 	/* check if user already exist */
 	list_for_each_entry(ptr, &irq_managers[_irq].users, list) {
 		if (ptr->user == _user) {
@@ -4090,8 +4094,6 @@ int irq_remove_user(const void *_user,
 	struct irq_user *corr_user = NULL;
 
 	spin_lock_irqsave(&afe_control_lock, flags);
-	pr_debug("%s(), user %p, irq %d\n",
-		 __func__, _user, _irq);
 	/* get _user's irq_user ptr */
 	list_for_each_entry(ptr, &irq_managers[_irq].users, list) {
 		if (ptr->user == _user) {
@@ -4133,8 +4135,6 @@ int irq_update_user(const void *_user,
 	struct irq_user *corr_user = NULL;
 
 	spin_lock_irqsave(&afe_control_lock, flags);
-	pr_debug("%s(), user %p, irq %d, rate %d, count %d\n",
-		 __func__, _user, _irq, _rate, _count);
 	/* get _user's irq_user ptr */
 	list_for_each_entry(ptr, &irq_managers[_irq].users, list) {
 		if (ptr->user == _user) {

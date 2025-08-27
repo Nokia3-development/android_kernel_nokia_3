@@ -42,6 +42,7 @@ static void __iomem *topckgen_base;
 static void __iomem *infracfg_ao_base;
 #endif
 static struct mt_pmic_wrap_driver *mt_wrp;
+static u32 pwrap_read_test(void);
 
 static spinlock_t	wrp_lock = __SPIN_LOCK_UNLOCKED(lock);
 /* spinlock_t	wrp_lock = __SPIN_LOCK_UNLOCKED(lock); */
@@ -205,9 +206,15 @@ static s32 mt_pwrap_store_hal(const char *buf, size_t count)
 /*---------------------------------------------------------------------------*/
 #else
 /*-pwrap debug--------------------------------------------------------------------------*/
-static inline void pwrap_dump_ap_register(void)
+void pwrap_dump_ap_register(void)
 {
 	u32 i = 0;
+
+	PWRAPREG("Reset PMIC Wrap WACS2 start\n");
+	WRAP_WR32(PMIC_WRAP_WACS2_EN, DISABLE);
+	WRAP_WR32(PMIC_WRAP_WACS2_EN, ENABLE);
+	PWRAPREG("PMIC_WRAP_WACS2_EN = 0x%x\n", WRAP_RD32(PMIC_WRAP_WACS2_EN));
+	PWRAPREG("Reset PMIC Wrap WACS2 done\n");
 
 	PWRAPREG("dump pwrap register, base=0x%p\n", PMIC_WRAP_BASE);
 	PWRAPREG("address     :   3 2 1 0    7 6 5 4    B A 9 8    F E D C\n");
@@ -236,6 +243,8 @@ static inline void pwrap_dump_ap_register(void)
 	}
 	PWRAPREG("infra clock1 0x10000048 =0x%x\n", WRAP_RD32(infracfg_ao_base+0x48));
 	PWRAPREG("infra clock2 0x10210080 =0x%x\n", WRAP_RD32(topckgen_base+0x80));
+
+	pwrap_read_test();
 	#endif
 }
 static inline void pwrap_dump_pmic_register(void)
@@ -547,17 +556,17 @@ static s32 pwrap_wacs2_hal(u32  write, u32  adr, u32  wdata, u32 *rdata)
 	if ((wdata & ~(0xffff)) != 0)
 		return E_PWR_INVALID_WDAT;
 
-	spin_lock_irqsave(&wrp_lock, flags);
 	/* check pmicaddr 0xa bit11 & bit10 ,bit 11 only can write1 bit 10 only can write 0 request by Wy Chuang */
-	if (0 != write && 0xa == adr) {
+	if (0 != write && (0xa == adr || 0xb == adr)) {
 
 		if (0 == (wdata & (1<<11)) || 1 == ((wdata>>10) & 0x1)) {
 			PWRAPERR(" pwrap_wacs2_hal check 0xa err pid=%d, wdata=0x%x\n", current->pid, wdata);
-			goto FAIL;
+			return E_PWR_INVALID_WDAT;
 			/* BUG_ON(1); */
 		}
 	}
 
+	spin_lock_irqsave(&wrp_lock, flags);
 	/* Check IDLE & INIT_DONE in advance */
 	return_value = wait_for_state_idle(wait_for_fsm_idle, TIMEOUT_WAIT_IDLE,
 	PMIC_WRAP_WACS2_RDATA, PMIC_WRAP_WACS2_VLDCLR, 0);
@@ -648,7 +657,7 @@ static s32 _pwrap_wacs2_nochk(u32 write, u32 adr, u32 wdata, u32 *rdata)
 	/* PWRAPFUC(); */
 	/* Check argument validation */
 
-	if (0 != write && 0xa == adr) {
+	if (0 != write && (0xa == adr || 0xb == adr)) {
 
 		if (0 == (wdata & (1<<11)) || 1 == ((wdata>>10) & 0x01)) {
 			PWRAPERR("_pwrap_wacs2_nochk check 0xa err pid=%d, wdata=0x%x\n", current->pid, wdata);
@@ -1413,6 +1422,8 @@ static u32 pwrap_read_test(void)
 		return E_PWR_READ_TEST_FAIL;
 	}
 #endif
+	PWRAPREG("Read Test,rdata=0x%x, exp=0x5aa5,return_value=0x%x\n", rdata, return_value);
+
 	return 0;
 }
 static u32 pwrap_write_test(void)

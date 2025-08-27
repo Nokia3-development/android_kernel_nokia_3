@@ -345,7 +345,10 @@ static void arch_counter_set_user_access(void)
 			| ARCH_TIMER_USR_PCT_ACCESS_EN);
 
 	/* Enable user access to the virtual counter */
-	cntkctl |= ARCH_TIMER_USR_VCT_ACCESS_EN;
+	if (IS_ENABLED(CONFIG_ARM_ARCH_TIMER_VCT_ACCESS))
+		cntkctl |= ARCH_TIMER_USR_VCT_ACCESS_EN;
+	else
+		cntkctl &= ~ARCH_TIMER_USR_VCT_ACCESS_EN;
 
 	arch_timer_set_cntkctl(cntkctl);
 }
@@ -494,9 +497,6 @@ static void __init arch_counter_register(unsigned type)
 
 static void arch_timer_stop(struct clock_event_device *clk)
 {
-	pr_debug("arch_timer_teardown disable IRQ%d cpu #%d\n",
-		 clk->irq, smp_processor_id());
-
 	if (arch_timer_use_virtual)
 		disable_percpu_irq(arch_timer_ppi[VIRT_PPI]);
 	else {

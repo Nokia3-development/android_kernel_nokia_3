@@ -45,6 +45,7 @@ static char verifiedbootstate[VERITY_COMMANDLINE_PARAM_LENGTH];
 static char veritymode[VERITY_COMMANDLINE_PARAM_LENGTH];
 static char veritykeyid[VERITY_DEFAULT_KEY_ID_LENGTH];
 static char buildvariant[BUILD_VARIANT];
+static char securityfused[SECURITY_FUSED];
 
 static bool target_added;
 static bool verity_enabled = true;
@@ -97,6 +98,16 @@ static int __init verity_buildvariant(char *line)
 }
 
 __setup("buildvariant=", verity_buildvariant);
+
+/* Allow invalid metadata when the device is no secure fused {*/
+static int __init platform_securityfused_state_param(char *line)
+{
+	strlcpy(securityfused, line, sizeof(securityfused));
+	return 1;
+}
+
+__setup("androidboot.securityfused=", platform_securityfused_state_param);
+/* } */
 #endif
 
 static inline bool default_verity_key_id(void)
@@ -124,6 +135,15 @@ static inline bool is_unlocked(void)
 
 	return !strncmp(verifiedbootstate, unlocked, sizeof(unlocked));
 }
+
+/* Allow invalid metadata when the device is no secure fused {*/
+static inline bool is_not_securityfused(void)
+{
+	static const char fused[] = "false";
+
+	return !strncmp(securityfused, fused, sizeof(fused));
+}
+/* } */
 
 static int table_extract_mpi_array(struct public_key_signature *pks,
 				const void *data, size_t len)
@@ -727,9 +747,21 @@ static int android_verity_ctr(struct dm_target *ti, unsigned argc, char **argv)
 
 	dev = name_to_dev_t(target_device);
 	if (!dev) {
-		DMERR("no dev found for %s", target_device);
-		handle_error();
-		return -EINVAL;
+		const unsigned int timeout_ms = DM_VERITY_WAIT_DEV_TIMEOUT_MS;
+		unsigned int wait_time_ms = 0;
+
+		DMERR("android_verity_ctr: retry %s\n", target_device);
+		while (driver_probe_done() != 0 ||
+			(dev = name_to_dev_t(target_device)) == 0) {
+			msleep(100);
+			wait_time_ms += 100;
+			if (wait_time_ms > timeout_ms) {
+				DMERR("android_verity_ctr: retry timeout(%dms)\n", timeout_ms);
+				DMERR("no dev found for %s", target_device);
+				handle_error();
+				return -EINVAL;
+			}
+		}
 	}
 
 	if (is_eng())
@@ -753,6 +785,14 @@ static int android_verity_ctr(struct dm_target *ti, unsigned argc, char **argv)
 			DMWARN("Allow invalid metadata when unlocked");
 			return create_linear_device(ti, dev, target_device);
 		}
+
+		/* Allow invalid metadata when the device is no secure fused {*/
+		if (is_not_securityfused()) {
+			DMWARN("Allow invalid metadata when device is not secure fused");
+			return create_linear_device(ti, dev, target_device);
+		}
+		/* } */
+
 		DMERR("Error while extracting metadata");
 		handle_error();
 		goto free_metadata;

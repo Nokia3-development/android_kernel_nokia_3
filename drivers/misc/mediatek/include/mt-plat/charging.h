@@ -113,9 +113,11 @@ typedef enum {
 	CHARGING_CMD_GET_CSDAC_FALL_FLAG,
 	CHARGING_CMD_SET_TA_CURRENT_PATTERN,
 	CHARGING_CMD_SET_ERROR_STATE,
-    CHARGING_CMD_SET_SCV, //add for DPM.
-    CHARGING_CMD_GET_V_SAFE,
-    CHARGING_CMD_GET_CHARGING_ENABLE,
+#if defined(CONFIG_FIH_PROJECT_NE1)
+	CHARGING_CMD_SET_SCV, // add for DPM.
+	CHARGING_CMD_GET_V_SAFE, //
+	CHARGING_CMD_GET_CHARGING_ENABLE, //
+#endif
 	CHARGING_CMD_DISO_INIT,
 	CHARGING_CMD_GET_DISO_STATE,
 	CHARGING_CMD_SET_VINDPM,
@@ -617,13 +619,15 @@ extern unsigned int g_bcct_flag;
 /* ============================================================ */
 /* External function */
 /* ============================================================ */
-extern signed int chr_control_interface(CHARGING_CTRL_CMD cmd, void *data);
-
+#if defined(CONFIG_CHARGER_RT9458)
+//add
 #if defined(CONFIG_MTK_BQ24157_SUPPORT)
 extern kal_bool bq24157_chargin_hw_init_done;
 extern signed int bq24157_chr_control_interface(CHARGING_CTRL_CMD cmd, void *data);
+#endif
 extern signed int rt9458_chr_control_interface(CHARGING_CTRL_CMD cmd, void *data);
-
+#else
+extern signed int chr_control_interface(CHARGING_CTRL_CMD cmd, void *data);
 #endif
 
 extern unsigned int upmu_get_reg_value(unsigned int reg);
@@ -638,6 +642,8 @@ extern int is_mt6311_sw_ready(void);
 
 extern void hw_charging_enable_dp_voltage(int ison);
 
+/* For RT5735A SDA low workaround */
+extern void battery_disable_batfet(void);
 
 /* switch charger */
 extern void switch_charger_set_vindpm(unsigned int chr_v);

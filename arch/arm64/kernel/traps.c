@@ -32,12 +32,16 @@
 #include <linux/syscalls.h>
 
 #include <asm/atomic.h>
+#include <asm/barrier.h>
 #include <asm/debug-monitors.h>
 #include <asm/esr.h>
 #include <asm/traps.h>
+#include <asm/stack_pointer.h>
 #include <asm/stacktrace.h>
 #include <asm/exception.h>
 #include <asm/system_misc.h>
+#include <asm/esr.h>
+#include <asm/sysreg.h>
 #include <mt-plat/aee.h>
 #include <mt-plat/mtk_hooks.h>
 
@@ -48,7 +52,7 @@ static const char *handler[]= {
 	"Error"
 };
 
-int show_unhandled_signals = 1;
+int show_unhandled_signals = 0;
 
 /*
  * Dump out the contents of some memory nicely...
@@ -108,7 +112,7 @@ static void __dump_instr(const char *lvl, struct pt_regs *regs)
 	for (i = -4; i < 1; i++) {
 		unsigned int val, bad;
 
-		bad = __get_user(val, &((u32 *)addr)[i]);
+		bad = get_user(val, &((u32 *)addr)[i]);
 
 		if (!bad)
 			p += sprintf(p, i == 0 ? "(%08x) " : "%08x ", val);
@@ -135,11 +139,15 @@ static void dump_instr(const char *lvl, struct pt_regs *regs)
 static void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
 {
 	struct stackframe frame;
+	unsigned long irq_stack_ptr = IRQ_STACK_PTR(smp_processor_id());
 
 	pr_debug("%s(regs = %p tsk = %p)\n", __func__, regs, tsk);
 
 	if (!tsk)
 		tsk = current;
+
+	if (!try_get_task_stack(tsk))
+		return;
 
 	if (regs) {
 		frame.fp = regs->regs[29];
@@ -161,13 +169,22 @@ static void dump_backtrace(struct pt_regs *regs, struct task_struct *tsk)
 	pr_emerg("Call trace:\n");
 	while (1) {
 		unsigned long where = frame.pc;
+		unsigned long stack;
 		int ret;
 
 		ret = unwind_frame(&frame);
 		if (ret < 0)
 			break;
-		dump_backtrace_entry(where, frame.sp);
+		stack = frame.sp;
+
+		if (stack < irq_stack_ptr &&
+		    (stack + sizeof(struct pt_regs)) > irq_stack_ptr)
+			stack = IRQ_STACK_TO_TASK_STACK(irq_stack_ptr);
+
+		dump_backtrace_entry(where, stack);
 	}
+
+	put_task_stack(tsk);
 }
 
 void show_stack(struct task_struct *tsk, unsigned long *sp)
@@ -183,10 +200,9 @@ void show_stack(struct task_struct *tsk, unsigned long *sp)
 #endif
 #define S_SMP " SMP"
 
-static int __die(const char *str, int err, struct thread_info *thread,
-		 struct pt_regs *regs)
+static int __die(const char *str, int err, struct pt_regs *regs)
 {
-	struct task_struct *tsk = thread->task;
+	struct task_struct *tsk = current;
 	static int die_counter;
 	int ret;
 
@@ -201,7 +217,8 @@ static int __die(const char *str, int err, struct thread_info *thread,
 	print_modules();
 	__show_regs(regs);
 	pr_emerg("Process %.*s (pid: %d, stack limit = 0x%p)\n",
-		 TASK_COMM_LEN, tsk->comm, task_pid_nr(tsk), thread + 1);
+		 TASK_COMM_LEN, tsk->comm, task_pid_nr(tsk),
+		 end_of_stack(tsk));
 
 	if (!user_mode(regs) || in_interrupt()) {
 		dump_mem(KERN_EMERG, "Stack: ", regs->sp,
@@ -249,9 +266,9 @@ void die(const char *str, struct pt_regs *regs, int err)
 	die_owner = cpu;
 	console_verbose();
 	bust_spinlocks(1);
-	ret = __die(str, err, thread, regs);
+	ret = __die(str, err, regs);
 
-	if (regs && kexec_should_crash(thread->task))
+	if (regs && kexec_should_crash(current))
 		crash_kexec(regs);
 
 	bust_spinlocks(0);
@@ -370,6 +387,38 @@ asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
 	info.si_addr  = pc;
 
 	arm64_notify_die("Oops - undefined instruction", regs, &info, 0);
+}
+
+static void cntvct_read_handler(unsigned int esr, struct pt_regs *regs)
+{
+	int rt = (esr & ESR_ELx_SYS64_ISS_RT_MASK) >> ESR_ELx_SYS64_ISS_RT_SHIFT;
+
+	isb();
+	if (rt != 31)
+		regs->regs[rt] = arch_counter_get_cntvct();
+	regs->pc += 4;
+}
+
+static void cntfrq_read_handler(unsigned int esr, struct pt_regs *regs)
+{
+	int rt = (esr & ESR_ELx_SYS64_ISS_RT_MASK) >> ESR_ELx_SYS64_ISS_RT_SHIFT;
+
+	if (rt != 31)
+		regs->regs[rt] = read_sysreg(cntfrq_el0);
+	regs->pc += 4;
+}
+
+asmlinkage void __exception do_sysinstr(unsigned int esr, struct pt_regs *regs)
+{
+	if ((esr & ESR_ELx_SYS64_ISS_SYS_OP_MASK) == ESR_ELx_SYS64_ISS_SYS_CNTVCT) {
+		cntvct_read_handler(esr, regs);
+		return;
+	} else if ((esr & ESR_ELx_SYS64_ISS_SYS_OP_MASK) == ESR_ELx_SYS64_ISS_SYS_CNTFRQ) {
+		cntfrq_read_handler(esr, regs);
+		return;
+	}
+
+	do_undefinstr(regs);
 }
 
 long compat_arm_syscall(struct pt_regs *regs);

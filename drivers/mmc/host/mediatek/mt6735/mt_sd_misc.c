@@ -184,7 +184,7 @@ static int simple_sd_ioctl_multi_rw(struct msdc_ioctl *msdc_ctl)
 	 * sg_msdc_multi_buffer should alloc size :max_reg_size,not 64KB
 	 * at simple_sd_init function.
 	 */
-	if (msdc_ctl->total_size > (64 * 1024)) {
+	if (msdc_ctl->total_size >= (64 * 1024)) {
 		pr_err("%s [%d]: read or write size excced 64KB\n", __func__, __LINE__);
 		ret = -EFAULT;
 		goto out;
@@ -1127,6 +1127,9 @@ static long simple_sd_ioctl(struct file *file, unsigned int cmd, unsigned long a
 			return -EINVAL;
 		}
 		msdc_ctl.result = ret;
+
+		if (arg < USER_DS && get_fs() == KERNEL_DS)
+			return -EFAULT;
 		if (copy_to_user((void *)arg, &msdc_ctl, size))
 			return -EFAULT;
 	}

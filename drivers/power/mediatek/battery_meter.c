@@ -575,7 +575,7 @@ static void __batt_meter_parse_table(const struct device_node *np,
 int __batt_meter_init_cust_data_from_dt(void)
 {
 	struct device_node *np;
-	int num;
+	int num = 0;
 	unsigned int idx, addr, val;
 
 	/* check customer setting */
@@ -2971,6 +2971,7 @@ void fgauge_algo_run_init(void)
 unsigned char reset_fg_bat_int = KAL_TRUE;
 void fg_bat_int_handler(void)
 {
+	pr_notice("fg_bat_int_handler\n");
 	reset_fg_bat_int = KAL_TRUE;
 	wake_up_bat2();
 }
@@ -3092,9 +3093,9 @@ signed int get_dynamic_period(int first_use, int first_wakeup_time, int battery_
 		car_instant = car_instant - (car_instant * 2);
 
 
-	if (BMT_status.UI_SOC != BMT_status.SOC) {
-		last_time = 10;
-		g_spm_timer = 10;
+	if (BMT_status.UI_SOC != BMT_status.SOC && gDisableGM != true) {
+		last_time = 60;
+		g_spm_timer = 60;
 		bm_print(BM_LOG_CRTI, "[get_dynamic_period] UISOC:%d SOC:%d vbat:%d current:%d car:%d new_time:%d\n",
 			BMT_status.UI_SOC, BMT_status.SOC, vbat_val, current_instant, car_instant, g_spm_timer);
 		return g_spm_timer;
@@ -4526,7 +4527,7 @@ static int battery_meter_resume(struct platform_device *dev)
 
 #elif defined(SOC_BY_SW_FG) || defined(SOC_BY_HW_FG)
 #if defined(SOC_BY_SW_FG)
-	signed int hw_ocv_after_sleep;
+	signed int hw_ocv_after_sleep = 0;
 	signed int DOD_hwocv;
 	struct timespec now_time;
 #endif
@@ -4568,11 +4569,13 @@ static int battery_meter_resume(struct platform_device *dev)
 			pr_warn("[battery_meter] trigger oam_run() for 30s threshold.\n");
 	}
 
+
+	battery_meter_ctrl(BATTERY_METER_CMD_GET_HW_OCV,
+		&hw_ocv_after_sleep);
+
 	/* try to calibrate D0 by HWOCV
 	if battery has no loading for more than 30mins */
 	if (sleep_interval > 1800 && bat_is_charger_exist() == KAL_FALSE) {
-		battery_meter_ctrl(BATTERY_METER_CMD_GET_HW_OCV,
-			&hw_ocv_after_sleep);
 
 		DOD_hwocv = fgauge_read_d_by_v(hw_ocv_after_sleep);
 
@@ -4603,8 +4606,8 @@ static int battery_meter_resume(struct platform_device *dev)
 	}
 
 	bm_print(BM_LOG_CRTI,
-		 "sleeptime=(%d)s, be_ocv=(%d), af_ocv=(%d), D0=(%d), car1=(%d), car2=(%d)\n",
-		 _g_bat_sleep_total_time,
+		 "sleeptime=(%d:%d)s, be_ocv=(%d), af_ocv=(%d), D0=(%d), car1=(%d), car2=(%d)\n",
+		 _g_bat_sleep_total_time, sleep_interval,
 		 g_hw_ocv_before_sleep, hw_ocv_after_sleep, oam_d0, oam_car_1, oam_car_2);
 #endif
 #endif

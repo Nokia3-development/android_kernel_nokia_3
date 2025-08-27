@@ -26,7 +26,6 @@
 #define SENSOR_PR_ERR(fmt, args...)	pr_err(SENSOR_TAG fmt, ##args)
 #define SENSOR_LOG(fmt, args...)	pr_debug(SENSOR_TAG fmt, ##args)
 
-#if 0
 int get_accel_dts_func(struct device_node *node, struct acc_hw *hw)
 {
 	int i, ret;
@@ -81,7 +80,6 @@ int get_accel_dts_func(struct device_node *node, struct acc_hw *hw)
 
 	return 0;
 }
-
 
 int get_alsps_dts_func(struct device_node *node, struct alsps_hw *hw)
 {
@@ -271,9 +269,7 @@ int get_mag_dts_func(struct device_node *node, struct mag_hw *hw)
 	return 0;
 }
 
-#else
-
-struct acc_hw *f_get_accel_dts_func(const char *name, struct acc_hw *hw)
+struct acc_hw *fih_get_accel_dts_func(const char *name, struct acc_hw *hw)
 {
 	hw->i2c_num = 2;
 
@@ -293,7 +289,7 @@ struct acc_hw *f_get_accel_dts_func(const char *name, struct acc_hw *hw)
 	return hw;
 }
 
-struct alsps_hw *f_get_alsps_dts_func(const char *name, struct alsps_hw *hw)
+struct alsps_hw *fih_get_alsps_dts_func(const char *name, struct alsps_hw *hw)
 {
 	hw->i2c_num = 2;
 
@@ -354,7 +350,7 @@ struct alsps_hw *f_get_alsps_dts_func(const char *name, struct alsps_hw *hw)
 	return hw;
 }
 
-struct gyro_hw *f_get_gyro_dts_func(const char *name, struct gyro_hw *hw)
+struct gyro_hw *fih_get_gyro_dts_func(const char *name, struct gyro_hw *hw)
 {
 	hw->i2c_num = 2;
 
@@ -374,7 +370,7 @@ struct gyro_hw *f_get_gyro_dts_func(const char *name, struct gyro_hw *hw)
 	return hw;
 }
 
-struct mag_hw *f_get_mag_dts_func(const char *name, struct mag_hw *hw)
+struct mag_hw *fih_get_mag_dts_func(const char *name, struct mag_hw *hw)
 {
 	hw->i2c_num = 2;
 
@@ -391,10 +387,6 @@ struct mag_hw *f_get_mag_dts_func(const char *name, struct mag_hw *hw)
 
 	return hw;
 }
-
-#endif
-
-
 
 int get_baro_dts_func(struct device_node *node, struct baro_hw *hw)
 {

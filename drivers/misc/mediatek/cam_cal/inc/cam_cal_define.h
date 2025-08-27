@@ -18,7 +18,8 @@
 #include <linux/fs.h>
 #include <linux/compat.h>
 #endif
-
+//OEM
+#ifdef CONFIG_FIH_PROJECT_NE1
 typedef struct{
 	u32 u4Offset;
 	u32 u4Length;
@@ -37,6 +38,25 @@ typedef struct{
 	compat_uptr_t pu1Params;
 } COMPAT_stCAM_CAL_INFO_STRUCT;
 #endif
+#else /*FRTP*/
+typedef struct{
+	u32 u4Offset;
+	u32 u4Length;
+	u32 sensorID;
+	u32 deviceID;
+	u8 *pu1Params;
+} stCAM_CAL_INFO_STRUCT, *stPCAM_CAL_INFO_STRUCT;
 
+#ifdef CONFIG_COMPAT
+
+typedef struct{
+	u32 u4Offset;
+	u32 u4Length;
+	u32 sensorID;
+	u32 deviceID;
+	compat_uptr_t pu1Params;
+} COMPAT_stCAM_CAL_INFO_STRUCT;
+#endif
+#endif /*CONFIG_FIH_PROJECT_NE1*/
 #endif/*_CAM_CAL_DATA_H*/
 

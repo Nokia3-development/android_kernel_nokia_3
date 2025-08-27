@@ -392,7 +392,9 @@ static int tsbat_sysrst_set_cur_state(struct thermal_cooling_device *cdev, unsig
 
 /* BUG(); */
 		/* arch_reset(0,NULL); */
-		//*(unsigned int *)0x0 = 0xdead;	/* To trigger data abort to reset the system for thermal protection. */
+#if !defined(CONFIG_FIH_PSE_TEST) && !defined(CONFIG_FIH_PROJECT_NE1)
+		*(unsigned int *)0x0 = 0xdead;	/* To trigger data abort to reset the system for thermal protection. */
+#endif
 	}
 	return 0;
 }

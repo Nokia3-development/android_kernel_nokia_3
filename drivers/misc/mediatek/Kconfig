@@ -235,7 +235,6 @@ source "drivers/misc/mediatek/lens/Kconfig"
 source "drivers/misc/mediatek/mjc/Kconfig"
 source "drivers/misc/mediatek/mmp/Kconfig"
 source "drivers/misc/mediatek/multibridge/Kconfig"
-source "drivers/misc/mediatek/rrc/Kconfig"
 source "drivers/misc/mediatek/sync/Kconfig"
 source "drivers/misc/mediatek/videocodec/Kconfig"
 source "drivers/misc/mediatek/video/Kconfig"
@@ -422,6 +421,34 @@ config MTK_AB_OTA_UPDATER
 	bool "Support Android A/B system updates"
 	default n
 
+config MTK_GROUP_ENABLE_VERITY
+	bool "Support enable dm verity for grouped switch"
+	default y
+	select BLK_DEV_MD
+	select MD_LINEAR
+	select DM_ANDROID_VERITY
+	select KEYS
+	select INTEGRITY_SIGNATURES
+	select SYSTEM_TRUSTED_KEYRING
+	select DM_VERITY
+	select X509_CERTIFICATE_PARSER
+	select PUBLIC_KEY_ALGO_RSA
+	select ASYMMETRIC_KEY_TYPE
+	select ASYMMETRIC_PUBLIC_KEY_SUBTYPE
+
+config SYSTEM_AS_ROOT
+	bool "Support system-as-root, which merges ramdisk into system image"
+	default y
+
+config MTK_OTA_DEVICE
+	bool "OTA device"
+	default n
+	help
+	  This is an option for OTA devices configuration
+	  It support legacy flow when it declares ota devices.
+	  Internal project will disable it to support full functionality.
+	  If you are not sure about this, do not set it to y.
+
 source "drivers/misc/mediatek/aee/Kconfig"
 source "drivers/misc/mediatek/atf_log/Kconfig"
 source "drivers/misc/mediatek/boot/Kconfig"
@@ -434,7 +461,6 @@ source "drivers/misc/mediatek/gud/Kconfig"
 source "drivers/misc/mediatek/ice_debug/Kconfig"
 source "drivers/misc/mediatek/log_store/Kconfig"
 source "drivers/misc/mediatek/masp/Kconfig"
-
 source "drivers/misc/mediatek/mlog/Kconfig"
 source "drivers/misc/mediatek/mtprof/Kconfig"
 source "drivers/misc/mediatek/performance/Kconfig"
@@ -445,10 +471,8 @@ source "drivers/misc/mediatek/selinux_warning/Kconfig"
 source "drivers/misc/mediatek/sysenv/Kconfig"
 source "drivers/misc/mediatek/teei/Kconfig"
 source "drivers/misc/mediatek/trustzone/Kconfig"
-source "drivers/misc/mediatek/vow/Kconfig"
 source "drivers/misc/mediatek/watchpoint/Kconfig"
 source "drivers/misc/mediatek/rt-regmap/Kconfig"
-source "drivers/misc/mediatek/pd/Kconfig"
 
 config MTK_DM_VERITY_OFF
 	bool "Disable dm-verity"

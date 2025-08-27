@@ -14,6 +14,10 @@
 #include <linux/fs.h>
 #include <linux/mm.h>
 
+#ifdef CONFIG_MTK_GMO_RAM_OPTIMIZE
+#undef CONFIG_ANDROID_LOW_MEMORY_KILLER
+#endif
+
 void free_pgtables(struct mmu_gather *tlb, struct vm_area_struct *start_vma,
 		unsigned long floor, unsigned long ceiling);
 

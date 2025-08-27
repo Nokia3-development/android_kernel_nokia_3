@@ -743,6 +743,16 @@ struct signal_struct {
 
 #define SIGNAL_UNKILLABLE	0x00000040 /* for init: ignore fatal signals */
 
+#define SIGNAL_STOP_MASK (SIGNAL_CLD_MASK | SIGNAL_STOP_STOPPED | \
+			  SIGNAL_STOP_CONTINUED)
+
+static inline void signal_set_stop_flags(struct signal_struct *sig,
+					 unsigned int flags)
+{
+	WARN_ON(sig->flags & (SIGNAL_GROUP_EXIT|SIGNAL_GROUP_COREDUMP));
+	sig->flags = (sig->flags & ~SIGNAL_STOP_MASK) | flags;
+}
+
 /* If true, all threads except ->group_exit_task have pending SIGKILL */
 static inline int signal_group_exit(const struct signal_struct *sig)
 {
@@ -1365,6 +1375,13 @@ do { \
 #endif
 
 struct task_struct {
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+	/*
+	 * For reasons of header soup (see current_thread_info()), this
+	 * must be the first element of task_struct.
+	 */
+	struct thread_info thread_info;
+#endif
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	void *stack;
 	atomic_t usage;
@@ -1374,6 +1391,9 @@ struct task_struct {
 #ifdef CONFIG_SMP
 	struct llist_node wake_entry;
 	int on_cpu;
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+	unsigned int cpu;	/* current CPU */
+#endif
 	struct task_struct *last_wakee;
 	unsigned long wakee_flips;
 	unsigned long wakee_flip_decay_ts;
@@ -1435,7 +1455,7 @@ struct task_struct {
 	unsigned brk_randomized:1;
 #endif
 	/* per-thread vma caching */
-	u32 vmacache_seqnum;
+	u64 vmacache_seqnum;
 	struct vm_area_struct *vmacache[VMACACHE_SIZE];
 #if defined(SPLIT_RSS_COUNTING)
 	struct task_rss_stat	rss_stat;
@@ -2399,7 +2419,9 @@ void yield(void);
 extern struct exec_domain	default_exec_domain;
 
 union thread_union {
+#ifndef CONFIG_THREAD_INFO_IN_TASK
 	struct thread_info thread_info;
+#endif
 	unsigned long stack[THREAD_SIZE/sizeof(long)];
 };
 
@@ -2574,6 +2596,11 @@ static inline void mmdrop(struct mm_struct * mm)
 
 /* mmput gets rid of the mappings and all user-space */
 extern void mmput(struct mm_struct *);
+/* same as above but performs the slow path from the async kontext. Can
+ * be called from the atomic context as well
+ */
+extern void mmput_async(struct mm_struct *);
+
 /* Grab a reference to a task's mm, if it is not already going away */
 extern struct mm_struct *get_task_mm(struct task_struct *task);
 /*
@@ -2780,10 +2807,34 @@ static inline void threadgroup_lock(struct task_struct *tsk) {}
 static inline void threadgroup_unlock(struct task_struct *tsk) {}
 #endif
 
-#ifndef __HAVE_THREAD_FUNCTIONS
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+
+static inline struct thread_info *task_thread_info(struct task_struct *task)
+{
+	return &task->thread_info;
+}
+
+/*
+ * When accessing the stack of a non-current task that might exit, use
+ * try_get_task_stack() instead.  task_stack_page will return a pointer
+ * that could get freed out from under you.
+ */
+static inline void *task_stack_page(const struct task_struct *task)
+{
+	return task->stack;
+}
+
+#define setup_thread_stack(new,old)	do { } while(0)
+
+static inline unsigned long *end_of_stack(const struct task_struct *task)
+{
+	return task->stack;
+}
+
+#elif !defined(__HAVE_THREAD_FUNCTIONS)
 
 #define task_thread_info(task)	((struct thread_info *)(task)->stack)
-#define task_stack_page(task)	((task)->stack)
+#define task_stack_page(task)	((void *)(task)->stack)
 
 static inline void setup_thread_stack(struct task_struct *p, struct task_struct *org)
 {
@@ -2810,6 +2861,14 @@ static inline unsigned long *end_of_stack(struct task_struct *p)
 }
 
 #endif
+
+static inline void *try_get_task_stack(struct task_struct *tsk)
+{
+	return task_stack_page(tsk);
+}
+
+static inline void put_task_stack(struct task_struct *tsk) {}
+
 #define task_stack_end_corrupted(task) \
 		(*(end_of_stack(task)) != STACK_END_MAGIC)
 
@@ -3086,7 +3145,11 @@ static inline void ptrace_signal_wake_up(struct task_struct *t, bool resume)
 
 static inline unsigned int task_cpu(const struct task_struct *p)
 {
+#ifdef CONFIG_THREAD_INFO_IN_TASK
+	return p->cpu;
+#else
 	return task_thread_info(p)->cpu;
+#endif
 }
 
 static inline int task_node(const struct task_struct *p)

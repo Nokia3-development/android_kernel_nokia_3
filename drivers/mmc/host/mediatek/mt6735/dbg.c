@@ -41,6 +41,7 @@
 #ifdef MTK_MSDC_BRINGUP_DEBUG
 #include <mach/mt_pmic_wrap.h>
 #endif
+
 #define MTK_EMMC_CMD_DEBUG
 
 #ifdef MTK_IO_PERFORMANCE_DEBUG
@@ -2469,7 +2470,14 @@ static int msdc_debug_proc_show(struct seq_file *m, void *v)
 		read_write_state = mode;
 
 		seq_printf(m, "[****SD_Debug****]: host id: %d, mode: %d.\n", id, mode);
-		if (mode != 0) {
+		if (mode == 0) {
+#if 0
+			if (rw_thread) {
+				kthread_stop(rw_thread);
+			}
+#endif
+			seq_puts(m, "[****SD_Debug****]: stop read/write thread.\n");
+		} else {
 			seq_puts(m, "[****SD_Debug****]: start read/write thread.\n");
 			data_for_wr = (id & 0x3) | ((mode & 0x3) << 4);
 			rw_thread = kthread_create(rwThread, (void *)data_for_wr, "msdc_rw_thread");
@@ -3368,13 +3376,13 @@ static ssize_t msdc_debug_proc_write_DVT(struct file *file, const char __user *b
 	struct msdc_host *host;
 
 	if (count == 0)
-		return -1;
+		return -EINVAL;
 	if (count > 255)
 		count = 255;
 
 	ret = copy_from_user(cmd_buf, buf, count);
 	if (ret < 0)
-		return -1;
+		return -EFAULT;
 
 	cmd_buf[count] = '\0';
 	pr_err("[****SD_Debug****]msdc Write %s\n", cmd_buf);
@@ -3584,13 +3592,13 @@ static ssize_t msdc_voltage_proc_write(struct file *file, const char __user *buf
 	int scan_ret;
 
 	if (count == 0)
-		return -1;
+		return -EINVAL;
 	if (count > 255)
 		count = 255;
 
 	ret = copy_from_user(cmd_buf, buf, count);
 	if (ret < 0)
-		return -1;
+		return -EFAULT;
 
 	cmd_buf[count] = '\0';
 	pr_err("[****SD_Debug****]msdc Write %s\n", cmd_buf);
@@ -3641,6 +3649,7 @@ static const struct file_operations msdc_voltage_flag_fops = {
 int msdc_debug_proc_init(void)
 {
 	struct proc_dir_entry *prEntry;
+
 	kuid_t uid;
 	kgid_t gid;
 #ifdef MSDC_HQA
@@ -3658,7 +3667,7 @@ int msdc_debug_proc_init(void)
 	prEntry = proc_create("msdc_help", 0440, NULL, &msdc_help_fops);
 	if (!prEntry)
 		pr_err("[%s]: failed to create /proc/msdc_help\n", __func__);
-
+#if 0
 	prEntry = proc_create("msdc_FT", 0660, NULL, &msdc_FT_fops);
 	if (prEntry)
 		pr_err("[%s]: successfully create /proc/msdc_FT\n", __func__);
@@ -3672,7 +3681,7 @@ int msdc_debug_proc_init(void)
 	else
 		pr_err("[%s]: failed to create /proc/msdc_DVT\n", __func__);
 #endif
-
+#endif
 	memset(msdc_drv_mode, 0, sizeof(msdc_drv_mode));
 #if 0
 	tune = proc_create("msdc_tune", 0660, NULL, &msdc_tune_fops);

@@ -40,6 +40,7 @@
 #define ALSPS_TAG					"<ALS/PS> "
 #define ALSPS_FUN(f)				pr_debug(ALSPS_TAG"%s\n", __func__)
 #define ALSPS_PR_ERR(fmt, args...)	pr_err(ALSPS_TAG"%s %d : "fmt, __func__, __LINE__, ##args)
+#define ALSPS_ERR(fmt, args...)		pr_err(ALSPS_TAG"%s %d : "fmt, __func__, __LINE__, ##args)
 #define ALSPS_LOG(fmt, args...)		pr_debug(ALSPS_TAG fmt, ##args)
 #define ALSPS_VER(fmt, args...)		pr_debug(ALSPS_TAG"%s: "fmt, __func__, ##args) /* ((void)0) */
 

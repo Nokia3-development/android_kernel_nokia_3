@@ -59,6 +59,9 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/vmscan.h>
 
+#ifdef CONFIG_MTK_GMO_RAM_OPTIMIZE
+#undef CONFIG_ANDROID_LOW_MEMORY_KILLER
+#endif
 struct scan_control {
 	/* How many pages shrink_list() should reclaim */
 	unsigned long nr_to_reclaim;
@@ -137,7 +140,11 @@ struct scan_control {
 /*
  * From 0 .. 100.  Higher means more swappy.
  */
+#ifndef CONFIG_MTK_GMO_RAM_OPTIMIZE
 int vm_swappiness = 60;
+#else
+int vm_swappiness = 180;
+#endif
 /*
  * The total number of pages which are beyond the high watermark within all
  * zones.
@@ -268,10 +275,13 @@ late_initcall(add_shrinker_debug);
  */
 void unregister_shrinker(struct shrinker *shrinker)
 {
+	if (!shrinker->nr_deferred)
+		return;
 	down_write(&shrinker_rwsem);
 	list_del(&shrinker->list);
 	up_write(&shrinker_rwsem);
 	kfree(shrinker->nr_deferred);
+	shrinker->nr_deferred = NULL;
 }
 EXPORT_SYMBOL(unregister_shrinker);
 
@@ -1260,6 +1270,7 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 
 		if (PageDirty(page)) {
 			struct address_space *mapping;
+			bool migrate_dirty;
 
 			/* ISOLATE_CLEAN means only clean pages */
 			if (mode & ISOLATE_CLEAN)
@@ -1268,10 +1279,19 @@ int __isolate_lru_page(struct page *page, isolate_mode_t mode)
 			/*
 			 * Only pages without mappings or that have a
 			 * ->migratepage callback are possible to migrate
-			 * without blocking
+			 * without blocking. However, we can be racing with
+			 * truncation so it's necessary to lock the page
+			 * to stabilise the mapping as truncation holds
+			 * the page lock until after the page is removed
+			 * from the page cache.
 			 */
+			if (!trylock_page(page))
+				return ret;
+
 			mapping = page_mapping(page);
-			if (mapping && !mapping->a_ops->migratepage)
+			migrate_dirty = !mapping || mapping->a_ops->migratepage;
+			unlock_page(page);
+			if (!migrate_dirty)
 				return ret;
 		}
 	}
@@ -1938,7 +1958,7 @@ enum scan_balance {
 static int vmscan_swap_file_ratio = 1;
 module_param_named(swap_file_ratio, vmscan_swap_file_ratio, int, S_IRUGO | S_IWUSR);
 
-#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE)
+#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) && defined(CONFIG_ANDROID_LOW_MEMORY_KILLER)
 
 /* vmscan debug */
 static int vmscan_swap_sum = 200;
@@ -1964,7 +1984,7 @@ static int vmscan_threshold = 3000;
 module_param_named(duration_ms, vmscan_duration_ms, int, S_IRUGO | S_IWUSR);
 module_param_named(threshold, vmscan_threshold, int, S_IRUGO | S_IWUSR);
 
-#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE)
+#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) && defined(CONFIG_ANDROID_LOW_MEMORY_KILLER)
 /* #define LOGTAG "VMSCAN" */
 static unsigned long t;	/* 0 */
 static unsigned long history[2] = {0};
@@ -1996,7 +2016,7 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	enum lru_list lru;
 	bool some_scanned;
 	int pass;
-#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE)
+#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) && defined(CONFIG_ANDROID_LOW_MEMORY_KILLER)
 	int cpu;
 	unsigned long SwapinCount = 0, SwapoutCount = 0, cached = 0;
 	bool bThrashing = false;
@@ -2096,7 +2116,7 @@ static void get_scan_count(struct lruvec *lruvec, int swappiness,
 	 * With swappiness at 100, anonymous and file have the same priority.
 	 * This scanning priority is essentially the inverse of IO cost.
 	 */
-#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE)
+#if defined(CONFIG_ZRAM) && defined(CONFIG_MTK_GMO_RAM_OPTIMIZE) && defined(CONFIG_ANDROID_LOW_MEMORY_KILLER)
 	if (vmscan_swap_file_ratio) {
 		if (t == 0)
 			t = jiffies;
@@ -4059,7 +4079,13 @@ int zone_reclaim(struct zone *zone, gfp_t gfp_mask, unsigned int order)
  */
 int page_evictable(struct page *page)
 {
-	return !mapping_unevictable(page_mapping(page)) && !PageMlocked(page);
+	int ret;
+
+	/* Prevent address_space of inode and swap cache from being freed */
+	rcu_read_lock();
+	ret = !mapping_unevictable(page_mapping(page)) && !PageMlocked(page);
+	rcu_read_unlock();
+	return ret;
 }
 
 #ifdef CONFIG_SHMEM

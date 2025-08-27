@@ -1562,6 +1562,7 @@ static int cm36652_ps_factory_get_data(int32_t *data)
 }
 static int cm36652_ps_factory_get_raw_data(int32_t *data)
 {
+
 	int err = 0;
 	struct cm36652_priv *obj = cm36652_obj;
 

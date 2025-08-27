@@ -638,7 +638,7 @@ void ipanic_recursive_ke(struct pt_regs *regs, struct pt_regs *excp_regs, int cp
 	cpu_proc_fin();
 #endif
 	mrdump_mini_ke_cpu_regs(excp_regs);
-	mrdump_mini_per_cpu_regs(cpu, regs);
+	mrdump_mini_per_cpu_regs(cpu, regs, current);
 	__inner_flush_dcache_all();
 	if (!has_mt_dump_support())
 		emergency_restart();
@@ -755,7 +755,11 @@ static int ipanic_die(struct notifier_block *self, unsigned long cmd, void *ptr)
 	if (!has_mt_dump_support())
 		emergency_restart();
 
+	/* kick wdt to reduce timeout risk */
+	ipanic_kick_wdt();
 	ipanic_mrdump_mini(AEE_REBOOT_MODE_KERNEL_PANIC, "kernel Oops");
+	/* kick wdt after save the most critical infos */
+	ipanic_kick_wdt();
 	memset(&dumper, 0x0, sizeof(struct kmsg_dumper));
 	ipanic_klog_region(&dumper);
 	ipanic_data_to_sd(IPANIC_DT_KERNEL_LOG, &dumper);

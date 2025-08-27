@@ -34,14 +34,7 @@ struct alsps_hw {
 	unsigned int    als_level[C_CUST_ALS_LEVEL-1];
 	unsigned int    als_value[C_CUST_ALS_LEVEL];    /*!< the value reported in each level */
 	unsigned int    ps_threshold;                   /*!< the threshold of proximity sensor */
-    unsigned int    als_cmd_val;
-    unsigned int    ps_cmd_val;
-    unsigned int    ps_gain_setting;
-    unsigned int    ps_high_thd_val;
-    unsigned int    ps_low_thd_val;
 	unsigned int    als_window_loss;                /*!< the window loss  */
-    unsigned int    state_val;
-
 	unsigned int    ps_threshold_high;
 	unsigned int    ps_threshold_low;
 	unsigned int    als_threshold_high;
@@ -55,11 +48,11 @@ struct alsps_hw {
 	int power_lp_mode_ctrl;         /*!< 1: disable ldo low power mode when p sensor enabled ; 0: no action*/
 	bool is_batch_supported_ps;
 	bool is_batch_supported_als;
-	unsigned int   ratio;
 };
 
 int get_alsps_dts_func(struct device_node *node, struct alsps_hw *hw);
 
-struct alsps_hw *f_get_alsps_dts_func(const char *name, struct alsps_hw *hw);
+// 
+struct alsps_hw *fih_get_alsps_dts_func(const char *name, struct alsps_hw *hw);
 
 #endif

@@ -132,7 +132,7 @@ static struct vcorefs_profile vcorefs_ctrl = {
 	.vcore_dvs		= 1,
 	.freq_dfs		= 1,
 	.ddr_dfs		= 1,
-	.log_mask		= 0xffff0000 | (1U << KIR_GPU),
+	.log_mask		= 0xffff0000 | (1U << KIR_GPU) | (1U << KIR_PERF),
 
 	.late_init_opp_done	= 0,
 	.init_opp_perf		= 0,
@@ -189,6 +189,9 @@ static struct kicker_profile kicker_table[] = {
 	[KIR_WIFI] = {
 		.opp	= OPP_OFF,
 	},
+	[KIR_PERF] = {
+		.opp    = OPP_OFF,
+	},
 	[KIR_SYSFS] = {
 		.opp	= OPP_OFF,
 	}
@@ -207,7 +210,6 @@ static unsigned int get_vcore_uv(void)
 
 	return vcore < VCORE_INVALID ? vcore_pmic_to_uv(vcore) : 0;
 }
-
 static void update_vcore_pwrap_cmd(struct opp_profile *opp_ctrl_table)
 {
 	unsigned int diff;
@@ -411,12 +413,13 @@ static unsigned int find_min_opp(enum dvfs_kicker kicker)
 	unsigned int min = UINT_MAX;
 	int i;
 
-	vcorefs_crit_mask("[%d, %d, %d, %d, %d, %d]\n",
+	vcorefs_crit_mask("[%d, %d, %d, %d, %d, %d, %d]\n",
 				kicker_ctrl_table[KIR_GPU].opp,
 				kicker_ctrl_table[KIR_MM].opp,
 				kicker_ctrl_table[KIR_EMIBW].opp,
 				kicker_ctrl_table[KIR_SDIO].opp,
 				kicker_ctrl_table[KIR_WIFI].opp,
+				kicker_ctrl_table[KIR_PERF].opp,
 				kicker_ctrl_table[KIR_SYSFS].opp);
 
 	/* find the min opp from kicker table */
@@ -611,7 +614,7 @@ static int vcorefs_func_enable_check(enum dvfs_kicker kicker, enum dvfs_opp new_
 		return -ERR_OPP;
 
 	/* UHPM is only for GPU */
-	if (new_opp == OPPI_PERF_ULTRA && kicker != KIR_GPU && kicker != KIR_SYSFS)
+	if (new_opp == OPPI_PERF_ULTRA && kicker != KIR_GPU && kicker != KIR_WIFI && kicker != KIR_SYSFS)
 		return -ERR_OPP;
 
 	if (!pwrctrl->late_init_opp_done)
@@ -654,6 +657,8 @@ int vcorefs_request_dvfs_opp(enum dvfs_kicker kicker, enum dvfs_opp new_opp)
 
 	return r;
 }
+EXPORT_SYMBOL(vcorefs_request_dvfs_opp);
+
 
 /**************************************
  * SDIO AutoK related API
@@ -910,6 +915,7 @@ static ssize_t vcore_debug_show(struct kobject *kobj, struct kobj_attribute *att
 	p += sprintf(p, "[KIR_EMIBW] opp: %d\n", kicker_ctrl_table[KIR_EMIBW].opp);
 	p += sprintf(p, "[KIR_SDIO ] opp: %d\n", kicker_ctrl_table[KIR_SDIO].opp);
 	p += sprintf(p, "[KIR_WIFI ] opp: %d\n", kicker_ctrl_table[KIR_WIFI].opp);
+	p += sprintf(p, "[KIR_PERF ] opp: %d\n", kicker_ctrl_table[KIR_PERF].opp);
 	p += sprintf(p, "[KIR_SYSFS] opp: %d\n", kicker_ctrl_table[KIR_SYSFS].opp);
 	p += sprintf(p, "\n");
 
@@ -967,6 +973,8 @@ static ssize_t vcore_debug_store(struct kobject *kobj, struct kobj_attribute *at
 		vcorefs_request_dvfs_opp(KIR_SDIO, val);
 	} else if (!cmd_cmp(cmd, "KIR_WIFI")) {
 		vcorefs_request_dvfs_opp(KIR_WIFI, val);
+	} else if (!cmd_cmp(cmd, "KIR_PERF")) {
+		vcorefs_request_dvfs_opp(KIR_PERF, val);
 	} else if (!cmd_cmp(cmd, "KIR_SYSFS") && (val >= OPP_OFF && val < NUM_OPP)) {
 		if (is_vcorefs_can_work()) {
 			r = vcorefs_request_dvfs_opp(KIR_SYSFS, val);

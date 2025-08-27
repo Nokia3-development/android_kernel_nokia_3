@@ -17,9 +17,6 @@
 /* #include <sys/types.h> */
 /* #include <linux/ion.h> */
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #define IRQ_STATUS_MAX_NUM 16                   /* /< support max 16 return register values when HW done */
 
@@ -607,8 +604,5 @@ typedef struct _VAL_BufInfo {
 /* for DirectLink Meta Mode - */
 
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* #ifndef _VAL_TYPES_PUBLIC_H_ */

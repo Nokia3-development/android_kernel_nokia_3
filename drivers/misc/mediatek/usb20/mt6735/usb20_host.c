@@ -192,27 +192,37 @@ static struct musb_fifo_cfg fifo_cfg_host[] = {
 { .hw_ep_num =	8, .style = MUSB_FIFO_RX,   .maxpacket = 64,  .mode = MUSB_BUF_SINGLE},
 };
 
-u32 delay_time = 15;
-module_param(delay_time, int, 0644);
-u32 delay_time1 = 55;
-module_param(delay_time1, int, 0644);
-u32 iddig_cnt = 0;
-module_param(iddig_cnt, int, 0644);
+int delay_time = 15;
+module_param(delay_time, int, 0400);
+int delay_time1 = 55;
+module_param(delay_time1, int, 0400);
+int iddig_cnt = 0;
+module_param(iddig_cnt, int, 0400);
 
-
+// 
+extern int otg_last_flag;
+extern unsigned short fih_hwid;
 
 void mt_usb_set_vbus(struct musb *musb, int is_on)
 {
 	DBG(0, "mt65xx_usb20_vbus++,is_on=%d\r\n", is_on);
 #ifndef FPGA_PLATFORM
 	if (is_on) {
+		otg_last_flag = 1;
 		/* power on VBUS, implement later... */
 	#ifdef CONFIG_MTK_FAN5405_SUPPORT
 		fan5405_set_opa_mode(1);
 		fan5405_set_otg_pl(1);
 		fan5405_set_otg_en(1);
-	#elif defined(CONFIG_MTK_BQ24157_SUPPORT)
-		set_chr_enable_otg(1);    // RT9458.
+	#elif defined(CONFIG_CHARGER_RT9458)
+		#ifdef CONFIG_MTK_BQ24157_SUPPORT
+		if (fih_hwid <= 0x113) {
+			bq24157_set_opa_mode(1);
+			bq24157_set_otg_pl(1);
+			bq24157_set_otg_en(1);
+		} else 
+		#endif
+			set_chr_enable_otg(1);//RT9458.
 	#elif defined(CONFIG_MTK_BQ24261_SUPPORT)
 		bq24261_set_en_boost(1);
 	#elif defined(CONFIG_MTK_BQ24296_SUPPORT)
@@ -246,8 +256,14 @@ void mt_usb_set_vbus(struct musb *musb, int is_on)
 	#ifdef CONFIG_MTK_FAN5405_SUPPORT
 		fan5405_reg_config_interface(0x01, 0x30);
 		fan5405_reg_config_interface(0x02, 0x8e);
-	#elif defined(CONFIG_MTK_BQ24157_SUPPORT)
-		set_chr_enable_otg(0);    // RT9458.
+	#elif defined(CONFIG_CHARGER_RT9458)
+		#ifdef CONFIG_MTK_BQ24157_SUPPORT
+		if (fih_hwid <= 0x113) {
+			bq24157_reg_config_interface(0x01, 0x30);
+			bq24157_reg_config_interface(0x02, 0x8e);
+		} else 
+		#endif
+			set_chr_enable_otg(0);//RT9458.
 	#elif defined(CONFIG_MTK_BQ24261_SUPPORT)
 		bq24261_set_en_boost(0);
 	#elif defined(CONFIG_MTK_BQ24296_SUPPORT)
@@ -335,11 +351,11 @@ void mt_usb_init_drvvbus(void)
 }
 
 #if defined(CONFIG_USBIF_COMPLIANCE)
-u32 sw_deboun_time = 1;
+int sw_deboun_time = 1;
 #else
-u32 sw_deboun_time = 400;
+int sw_deboun_time = 400;
 #endif
-module_param(sw_deboun_time, int, 0644);
+module_param(sw_deboun_time, int, 0400);
 struct switch_dev otg_state;
 
 static bool musb_is_host(void)
@@ -431,15 +447,15 @@ void musb_session_restart(struct musb *musb)
 
 static struct delayed_work host_plug_test_work;
 int host_plug_test_enable; /* default disable */
-module_param(host_plug_test_enable, int, 0644);
+module_param(host_plug_test_enable, int, 0400);
 int host_plug_in_test_period_ms = 5000;
-module_param(host_plug_in_test_period_ms, int, 0644);
+module_param(host_plug_in_test_period_ms, int, 0400);
 int host_plug_out_test_period_ms = 5000;
-module_param(host_plug_out_test_period_ms, int, 0644);
+module_param(host_plug_out_test_period_ms, int, 0400);
 int host_test_vbus_off_time_us = 3000;
-module_param(host_test_vbus_off_time_us, int, 0644);
+module_param(host_test_vbus_off_time_us, int, 0400);
 int host_test_vbus_only = 1;
-module_param(host_test_vbus_only, int, 0644);
+module_param(host_test_vbus_only, int, 0400);
 static int host_plug_test_triggered;
 void switch_int_to_device(struct musb *musb)
 {
@@ -623,7 +639,6 @@ static void musb_id_pin_work(struct work_struct *data)
 
 	DBG(0, "musb is as %s\n", mtk_musb->is_host?"host":"device");
 	switch_set_state((struct switch_dev *)&otg_state, mtk_musb->is_host);
-
 	if (mtk_musb->is_host) {
 		/* setup fifo for host mode */
 		ep_config_from_table_for_host(mtk_musb);

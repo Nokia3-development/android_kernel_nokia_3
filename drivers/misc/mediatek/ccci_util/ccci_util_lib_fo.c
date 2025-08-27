@@ -619,6 +619,8 @@ static int parse_meta_boot_arguments(unsigned int *raw_ptr)
 
 	CCCI_UTIL_INF_MSG("md type at lk:0x%x] with rat 0x%x\n",
 			md_type_at_lk[active_id], md_info_tag_array[0]);
+	CCCI_UTIL_INF_MSG("final active_id:%d, meta_boot_arguments:%d\n",
+			active_id, meta_boot_arguments[active_id]);
 
 	return 0;
 }
@@ -974,6 +976,8 @@ static int __init collect_lk_boot_arguments(void)
 	/* Device tree method */
 	int ret;
 	unsigned int *raw_ptr;
+
+	s_g_lk_load_img_status = 0;
 
 	/* This function will initialize s_g_dt_chosen_node */
 	ret = of_scan_flat_dt(early_init_dt_get_chosen, NULL);
@@ -1451,8 +1455,11 @@ int get_md_img_type(int md_id)
 {
 	int md_support_val;
 
-	if (s_g_lk_load_img_status & LK_LOAD_MD_EN) /* MD standalone, only one image case */
+	if (s_g_lk_load_img_status & LK_LOAD_MD_EN) {/* MD standalone, only one image case */
+		CCCI_UTIL_INF_MSG("lk md en at get image type.val:%d[0x%x]\n",
+					get_md_type_from_lk(md_id), s_g_lk_load_img_status);
 		return get_md_type_from_lk(md_id);
+	}
 
 	/* Multi- image */
 	md_support_val = get_modem_support_cap(md_id);
@@ -1481,13 +1488,35 @@ int get_md_img_type(int md_id)
 			return 4;
 		if (md_support_val & MD_CAP_GSM)
 			return 1;
+		CCCI_UTIL_INF_MSG("get_md_img_type ret 0 for enhance\n");
 		return 0;
 	}
 
 	/* Legacy modem support val */
 	if (md_support_val <= LEGACY_UBIN_END_ID)
 		return md_support_val;
+	CCCI_UTIL_INF_MSG("get_md_img_type ret 0 for normal(%d)\n", md_support_val);
 	return 0;
+}
+
+int check_md_type(int data)
+{
+	unsigned int val = (unsigned int)data;
+
+	/* check ap view md type */
+	if ((val == 5) || (val == 6))
+		return val;
+
+	/* check md view md type */
+	if ((val & MD_CAP_ENHANCE) == MD_CAP_ENHANCE) {
+		if (val & (MD_CAP_FDD_LTE | MD_CAP_TDD_LTE)) {
+			if (val & MD_CAP_WCDMA)
+				return 5;
+			if (val & MD_CAP_TDS_CDMA)
+				return 6;
+		}
+	}
+	return -1;
 }
 
 int get_legacy_md_type(int md_id)

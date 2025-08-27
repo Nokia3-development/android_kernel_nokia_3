@@ -100,7 +100,6 @@ extern int kernel_init_done;
 extern int musb_force_on;
 extern int musb_host_dynamic_fifo;
 extern int musb_host_dynamic_fifo_usage_msk;
-extern unsigned musb_uart_debug;
 extern struct musb *mtk_musb;
 extern bool mtk_usb_power;
 extern int ep_config_from_table_for_host(struct musb *musb);
@@ -147,6 +146,11 @@ extern void send_otg_event(enum usb_otg_event event);
 #include "musb_gadget.h"
 #include <linux/usb/hcd.h>
 #include "musb_host.h"
+
+#ifdef CONFIG_DUAL_ROLE_USB_INTF
+#include <linux/usb/class-dual-role.h>
+#endif
+
 #ifdef CONFIG_OF
 
 enum {
@@ -550,6 +554,10 @@ struct musb {
 	enum usb_otg_event otg_event;
 #endif
 	struct workqueue_struct *st_wq;
+#ifdef CONFIG_DUAL_ROLE_USB_INTF
+	struct dual_role_phy_instance *dr_usb;
+#endif /* CONFIG_DUAL_ROLE_USB_INTF */
+
 };
 
 static inline struct musb *gadget_to_musb(struct usb_gadget *g)

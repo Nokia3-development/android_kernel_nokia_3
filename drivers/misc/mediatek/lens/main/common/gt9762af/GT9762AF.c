@@ -21,7 +21,14 @@
 #else
 #define LOG_INF(format, args...)
 #endif
-
+// add for BBS log++
+#define FIHBBS
+#ifdef FIHBBS
+#include "../../../../imgsensor/src/mt6735m/fihBBS/fih_camera_bbs.h"
+extern void fih_bbs_camera_msg_by_addr(int, int);
+//#define PK_ERR(fmt, arg...)         pr_err(AF_DRVNAME "[%s] " fmt, __func__, ##arg)
+#endif
+// add for BBS log--
 unsigned int get_boot_mode(void);
 static struct i2c_client *g_pstAF_I2Cclient;
 static int *g_pAF_Opened;
@@ -46,7 +53,13 @@ static int s4AF_ReadReg(unsigned short *a_pu2Result)
 	i4RetValue = i2c_master_recv(g_pstAF_I2Cclient, pBuff, 2);
 
 	if (i4RetValue < 0) {
-		LOG_INF("I2C read failed!!\n");
+		LOG_INF("[MIMI GT9762AF]I2C read failed!!\n");
+		// add for BBS log++
+		#ifdef FIHBBS
+			pr_err("[MIMI GT9762AF]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+			fih_bbs_camera_msg_by_addr(AF_I2C_SLAVE_ADDR, FIH_BBS_CAMERA_ERRORCODE_I2C_READ);
+		#endif
+		// add for BBS log--
 		return -1;
 	}
 
@@ -71,7 +84,13 @@ static int s4AF_WriteReg(u16 a_u2Data)
 	i4RetValue = i2c_master_send(g_pstAF_I2Cclient, puSendCmd, 2);
 
 	if (i4RetValue < 0) {
-		LOG_INF("I2C send failed!!\n");
+		LOG_INF("[MIMI GT9762AF]I2C send failed!!\n");
+		// add for BBS log++
+		#ifdef FIHBBS
+			pr_err("[MIMI GT9762AF]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+			fih_bbs_camera_msg_by_addr(AF_I2C_SLAVE_ADDR, FIH_BBS_CAMERA_ERRORCODE_I2C_WRITE);
+		#endif
+		// add for BBS log--
 		return -1;
 	}
 
@@ -265,7 +284,13 @@ static int s4GT9762AF_init(void)
 
     if (i4RetValue < 0) 
     {
-        LOG_INF("[GT9762AF] I2C send failed!! \n");
+        LOG_INF("[MIMI GT9762AF] I2C send failed!! \n");
+		// add for BBS log++
+		#ifdef FIHBBS
+			pr_err("[MIMI GT9762AF]%s\n %s()%4d\n", __FILE__, __func__  , __LINE__);
+			fih_bbs_camera_msg_by_addr(AF_I2C_SLAVE_ADDR, FIH_BBS_CAMERA_ERRORCODE_I2C_WRITE);
+		#endif
+		// add for BBS log--
         return -1;
     }
 

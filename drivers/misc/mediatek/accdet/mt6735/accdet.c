@@ -20,7 +20,7 @@
 #include <linux/timer.h>
 #include <linux/of.h>
 #include <linux/of_irq.h>
-#include <linux/hrtimer.h>
+#include <linux/hrtimer.h> // OEM
 
 #define DEBUG_THREAD 1
 
@@ -103,9 +103,12 @@ static struct workqueue_struct *accdet_disable_workqueue;
 struct pinctrl *accdet_pinctrl1;
 struct pinctrl_state *pins_eint_int;
 #endif
+
+
 #ifdef DEBUG_THREAD
 #endif
 
+// Begin, 
 //struct pinctrl *pinctrl7;
 static int short_timer = 0;
 static int short_timer2 = 0;
@@ -116,6 +119,10 @@ static struct hrtimer accdet_timer2;
 struct pinctrl_state *HeadsetSwitchEnableLow;
 struct pinctrl_state *HeadsetSwitchEnableHigh;
 struct pinctrl_state *HeadsetSwitchEnableDefault;
+
+extern unsigned short fih_hwid;
+// End, 
+
 
 static u32 pmic_pwrap_read(u32 addr);
 static void pmic_pwrap_write(u32 addr, unsigned int wdata);
@@ -298,6 +305,7 @@ static inline void disable_accdet(void)
 	/*sync with accdet_irq_handler set clear accdet irq bit to avoid  set clear accdet irq bit after disable accdet
 	disable accdet irq*/
 	
+	// OEM
     hrtimer_cancel(&accdet_timer);
     hrtimer_cancel(&accdet_timer2);
 	
@@ -436,6 +444,15 @@ static void accdet_eint_work_callback(struct work_struct *work)
 		eint_accdet_sync_flag = 1;
 		mutex_unlock(&accdet_eint_irq_sync_mutex);
 		wake_lock_timeout(&accdet_timer_lock, 7 * HZ);
+
+		// OEM
+		if (fih_hwid <= 0x113)
+		{
+			pinctrl_select_state(accdet_pinctrl1, HeadsetSwitchEnableHigh);
+			pr_warn("Headset switch enable\n");
+			msleep(100);
+		}
+		
 #ifdef CONFIG_ACCDET_PIN_SWAP
 		/*pmic_pwrap_write(0x0400, pmic_pwrap_read(0x0400)|(1<<14)); */
 		msleep(800);
@@ -494,6 +511,14 @@ static void accdet_eint_work_callback(struct work_struct *work)
 		eint_accdet_sync_flag = 0;
 		mutex_unlock(&accdet_eint_irq_sync_mutex);
 		del_timer_sync(&micbias_timer);
+
+		// OEM
+		if (fih_hwid <= 0x113)
+		{
+			pinctrl_select_state(accdet_pinctrl1, HeadsetSwitchEnableLow);
+			pr_warn("Headset switch disable\n");
+		}
+
 #ifdef CONFIG_ACCDET_PIN_RECOGNIZATION
 		show_icon_delay = 0;
 		cable_pin_recognition = 0;
@@ -607,6 +632,33 @@ static inline int accdet_setup_eint(struct platform_device *accdet_device)
 		return ret;
 	}
 	pinctrl_select_state(accdet_pinctrl1, pins_eint_int);
+
+	// Begin, 
+	if (fih_hwid <= 0x113)
+	{
+		/* gpio setting */
+		HeadsetSwitchEnableDefault = pinctrl_lookup_state(accdet_pinctrl1, "HeadsetSwitchEnableDefault");
+		if (IS_ERR(HeadsetSwitchEnableDefault))
+		{
+			ret = PTR_ERR(HeadsetSwitchEnableDefault);
+			/*pr_warn("Cannot find pinctrl7 HeadsetSwitchEnableDefault!\n");*/
+		}
+
+		HeadsetSwitchEnableLow = pinctrl_lookup_state(accdet_pinctrl1, "HeadsetSwitchEnableLow");
+		if (IS_ERR(HeadsetSwitchEnableLow))
+		{
+			ret = PTR_ERR(HeadsetSwitchEnableLow);
+			pr_warn("Cannot find pinctrl7 HeadsetSwitchEnableLow!\n");
+		}	
+
+		HeadsetSwitchEnableHigh = pinctrl_lookup_state(accdet_pinctrl1, "HeadsetSwitchEnableHigh");
+		if (IS_ERR(HeadsetSwitchEnableHigh))
+		{
+			ret = PTR_ERR(HeadsetSwitchEnableHigh);
+			pr_warn("Cannot find pinctrl7 HeadsetSwitchEnableHigh!\n");
+		}
+	}	
+	// End, 
 
 	/*node = of_find_matching_node(node, accdet_of_match);*/
 	node = of_find_matching_node(node, accdet_of_match);
@@ -787,7 +839,7 @@ static void send_key_event(int keycode, int flag)
 		break;
 	case MD_KEY:
 
-		 // for press hook twice or three times 
+		// for press hook twice or three times 
          if (call_status == 0)
          {
              if (!flag) {
@@ -1292,33 +1344,39 @@ void accdet_get_dts_data(void)
 	#else
 	int three_key[4];
 	#endif
+	int ret = 0;
 
 	ACCDET_INFO("[ACCDET]Start accdet_get_dts_data");
 	node = of_find_matching_node(node, accdet_of_match);
 	if (node) {
-		of_property_read_u32_array(node, "headset-mode-setting", debounce, ARRAY_SIZE(debounce));
 		of_property_read_u32(node, "accdet-mic-vol", &accdet_dts_data.mic_mode_vol);
 		of_property_read_u32(node, "accdet-plugout-debounce", &accdet_dts_data.accdet_plugout_debounce);
 		of_property_read_u32(node, "accdet-mic-mode", &accdet_dts_data.accdet_mic_mode);
 #ifdef CONFIG_FOUR_KEY_HEADSET
-		of_property_read_u32_array(node, "headset-four-key-threshold", four_key, ARRAY_SIZE(four_key));
-		memcpy(&accdet_dts_data.four_key, four_key+1, sizeof(struct four_key_threshold));
+		ret = of_property_read_u32_array(node, "headset-four-key-threshold", four_key, ARRAY_SIZE(four_key));
+		if (!ret)
+			memcpy(&accdet_dts_data.four_key, four_key+1, sizeof(struct four_key_threshold));
 		ACCDET_INFO("[Accdet]mid-Key = %d, voice = %d, up_key = %d, down_key = %d\n",
 		     accdet_dts_data.four_key.mid_key_four, accdet_dts_data.four_key.voice_key_four,
 		     accdet_dts_data.four_key.up_key_four, accdet_dts_data.four_key.down_key_four);
 #else
 		#ifdef CONFIG_HEADSET_TRI_KEY_CDD
-		of_property_read_u32_array(node, "headset-three-key-threshold-CDD", three_key, ARRAY_SIZE(three_key));
+		ret = of_property_read_u32_array(node, "headset-three-key-threshold-CDD",
+				three_key, ARRAY_SIZE(three_key));
 		#else
-		of_property_read_u32_array(node, "headset-three-key-threshold", three_key, ARRAY_SIZE(three_key));
+		ret = of_property_read_u32_array(node, "headset-three-key-threshold",
+				three_key, ARRAY_SIZE(three_key));
 		#endif
-		memcpy(&accdet_dts_data.three_key, three_key+1, sizeof(struct three_key_threshold));
+		if (!ret)
+			memcpy(&accdet_dts_data.three_key, three_key+1, sizeof(struct three_key_threshold));
 		ACCDET_INFO("[Accdet]mid-Key = %d, up_key = %d, down_key = %d\n",
 		     accdet_dts_data.three_key.mid_key, accdet_dts_data.three_key.up_key,
 		     accdet_dts_data.three_key.down_key);
 #endif
 
-		memcpy(&accdet_dts_data.headset_debounce, debounce, sizeof(debounce));
+		ret = of_property_read_u32_array(node, "headset-mode-setting", debounce, ARRAY_SIZE(debounce));
+		if (!ret)
+			memcpy(&accdet_dts_data.headset_debounce, debounce, sizeof(debounce));
 		cust_headset_settings = &accdet_dts_data.headset_debounce;
 		ACCDET_INFO("[Accdet]pwm_width = %x, pwm_thresh = %x\n deb0 = %x, deb1 = %x, mic_mode = %d\n",
 		     cust_headset_settings->pwm_width, cust_headset_settings->pwm_thresh,
@@ -1385,6 +1443,7 @@ static inline void accdet_init(void)
 #endif
    /*********************ACCDET Analog Setting***********************************************************/
 
+	// OEM
 	//pmic_set_register_value(PMIC_RG_AUDMICBIASVREF, accdet_dts_data.mic_mode_vol);
 	pmic_set_register_value(PMIC_RG_AUDMICBIAS1BYPASSEN, 1);
 

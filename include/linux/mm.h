@@ -1268,8 +1268,7 @@ int set_page_dirty_lock(struct page *page);
 int clear_page_dirty_for_io(struct page *page);
 int get_cmdline(struct task_struct *task, char *buffer, int buflen);
 
-extern struct task_struct *task_of_stack(struct task_struct *task,
-				struct vm_area_struct *vma, bool in_group);
+int vma_is_stack_for_task(struct vm_area_struct *vma, struct task_struct *t);
 
 extern unsigned long move_page_tables(struct vm_area_struct *vma,
 		unsigned long old_addr, struct vm_area_struct *new_vma,
@@ -1372,7 +1371,14 @@ static inline void sync_mm_rss(struct mm_struct *mm)
 }
 #endif
 
-int vma_wants_writenotify(struct vm_area_struct *vma);
+#ifndef __HAVE_ARCH_PTE_DEVMAP
+static inline int pte_devmap(pte_t pte)
+{
+	return 0;
+}
+#endif
+
+int vma_wants_writenotify(struct vm_area_struct *vma, pgprot_t vm_page_prot);
 
 extern pte_t *__get_locked_pte(struct mm_struct *mm, unsigned long addr,
 			       spinlock_t **ptl);
@@ -1789,8 +1795,14 @@ void anon_vma_interval_tree_verify(struct anon_vma_chain *node);
 
 /* mmap.c */
 extern int __vm_enough_memory(struct mm_struct *mm, long pages, int cap_sys_admin);
-extern int vma_adjust(struct vm_area_struct *vma, unsigned long start,
-	unsigned long end, pgoff_t pgoff, struct vm_area_struct *insert);
+extern int __vma_adjust(struct vm_area_struct *vma, unsigned long start,
+	unsigned long end, pgoff_t pgoff, struct vm_area_struct *insert,
+	struct vm_area_struct *expand);
+static inline int vma_adjust(struct vm_area_struct *vma, unsigned long start,
+	unsigned long end, pgoff_t pgoff, struct vm_area_struct *insert)
+{
+	return __vma_adjust(vma, start, end, pgoff, insert, NULL);
+}
 extern struct vm_area_struct *vma_merge(struct mm_struct *,
 	struct vm_area_struct *prev, unsigned long addr, unsigned long end,
 	unsigned long vm_flags, struct anon_vma *, struct file *, pgoff_t,

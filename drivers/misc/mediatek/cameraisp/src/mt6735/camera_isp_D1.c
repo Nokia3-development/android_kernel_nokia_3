@@ -40,6 +40,7 @@
 #include <mach/irqs.h>
 #include <mach/mt_clkmgr.h>	/* For clock mgr APIS. enable_clock()/disable_clock(). */
 #include <mt-plat/sync_write.h>	/* For mt65xx_reg_sync_writel(). */
+#include <mt-plat/mt_ccci_common.h>
 #include <linux/of_platform.h>
 #include <linux/of_irq.h>
 #include <linux/of_address.h>
@@ -998,18 +999,19 @@ static MUINT32 g_DmaErr_p1[nDMA_ERR] = { 0 };
 	} else if (_LOG_INF	== logT) {\
 		str_leng = NORMAL_STR_LEN*INF_PAGE;\
 	} else {\
-		str_leng = 0;\
+		LOG_ERR("Unknown logT(%d)", (MUINT32)logT);\
+		break;\
 	} \
 	ptr	= pDes = (char *)&(gSvLog[irq]._str[ppb][logT][gSvLog[irq]._cnt[ppb][logT]]);	\
 	avaLen = str_leng - 1 - gSvLog[irq]._cnt[ppb][logT];\
-	if (avaLen > 1) {\
-		snprintf((char *)(pDes), avaLen, fmt, ##__VA_ARGS__);  \
-		if ('\0' !=	gSvLog[irq]._str[ppb][logT][str_leng - 1]) { \
+	if (avaLen > 1) {  \
+		snprintf(pDes, avaLen, fmt, ##__VA_ARGS__);  \
+		if ('\0' !=	gSvLog[irq]._str[ppb][logT][str_leng - 1]) {\
 			LOG_ERR("(%d)(%d)log str over flow", irq, logT);\
 		} \
 		while (*ptr++ != '\0') {\
 			(*ptr2)++;\
-		} \
+		}	  \
 	} else { \
 		LOG_ERR("(%d)(%d)log str avalible=0", irq, logT);\
 	} \
@@ -6186,7 +6188,6 @@ static long ISP_Buf_CTRL_FUNC(unsigned long Param)
 				}
 
 				if (ii == _rt_dma_max_) {
-					pstRTBuf->dropCnt = 0;
 					pstRTBuf->state = 0;
 				}
 			}
@@ -6334,20 +6335,18 @@ static MINT32 ISP_SOF_Buf_Get(eISPIrq irqT, CQ_RTBC_FBC *pFbc, MUINT32 *pCurr_pa
 #if	0			/* this can't be trusted , because rcnt_in is pull high at sof */
 	/* No drop */
 	if (imgo_fbc.Bits.FB_NUM != imgo_fbc.Bits.FBC_CNT) {
-		pstRTBuf->dropCnt = 0;
+		bDrop = 0;
 	} else {
 		/* dropped */
-		pstRTBuf->dropCnt = 1;
+		bDrop = 1;
 	}
-#else
-	pstRTBuf->dropCnt = bDrop;
 #endif
 	/*      */
 	/* if(IspInfo.DebugMask & ISP_DBG_INT_2) { */
-	/* IRQ_LOG_KEEPER(irqT,m_CurrentPPB,_LOG_INF,"[rtbc]dropCnt(%d)\n",pstRTBuf->dropCnt); */
+	/* IRQ_LOG_KEEPER(irqT,m_CurrentPPB,_LOG_INF,"[rtbc]dropCnt(%d)\n",bDrop); */
 	/* } */
 	/* No drop */
-	if (0 == pstRTBuf->dropCnt) {
+	if (0 == bDrop) {
 
 		/* verify write buffer */
 
@@ -6732,21 +6731,18 @@ static MINT32 ISP_CAMSV_SOF_Buf_Get(unsigned int dma, CQ_RTBC_FBC camsv_fbc, MUI
 	}
 #if	0			/*     this can't be trusted , because rcnt_in is pull high at sof     */
 	if (camsv_fbc.Bits.FB_NUM != camsv_fbc.Bits.FBC_CNT)
-		pstRTBuf->dropCnt = 0;
+		bDrop = 0;
 	else
-		pstRTBuf->dropCnt = 1;
-
-#else
-	pstRTBuf->dropCnt = bDrop;
+		bDrop = 1;
 #endif
 
 	if (IspInfo.DebugMask & ISP_DBG_INT_2)
-		IRQ_LOG_KEEPER(irqT, m_CurrentPPB, _LOG_INF, "sv%d dropCnt(%ld)\n", dma,
-			       pstRTBuf->dropCnt);
+		IRQ_LOG_KEEPER(irqT, m_CurrentPPB, _LOG_INF, "sv%d dropCnt(%d)\n", dma,
+			       bDrop);
 
 
 	/* No drop */
-	if (0 == pstRTBuf->dropCnt) {
+	if (0 == bDrop) {
 		if (PrvAddr[out] == curr_pa)
 			IRQ_LOG_KEEPER(irqT, m_CurrentPPB, _LOG_ERR,
 				       "sv%d overlap prv(0x%x) = Cur(0x%x)\n", dma, PrvAddr[out],
@@ -9974,7 +9970,7 @@ static long ISP_ioctl(struct file *pFile, unsigned int Cmd, unsigned long Param)
 	MINT32 Ret = 0;
 	/*      */
 	MBOOL HoldEnable = MFALSE;
-	MUINT32 DebugFlag[2] = { 0 }, pid = 0;
+	MUINT32 DebugFlag[2] = { 0 };
 	ISP_REG_IO_STRUCT RegIo;
 	ISP_HOLD_TIME_ENUM HoldTime;
 	ISP_WAIT_IRQ_STRUCT IrqInfo;
@@ -10529,18 +10525,21 @@ static long ISP_ioctl(struct file *pFile, unsigned int Cmd, unsigned long Param)
 		break;
 #ifdef ISP_KERNEL_MOTIFY_SINGAL_TEST
 	case ISP_SET_USER_PID:
-		if (copy_from_user(&pid, (void *)Param, sizeof(MUINT32)) == 0) {
-			spin_lock(&(IspInfo.SpinLockIsp));
-			getTaskInfo((pid_t) pid);
-
-			sendSignal();
-
-			LOG_DBG("[ISP_KERNEL_MOTIFY_SINGAL_TEST]:0x08%x	", pid);
-			spin_unlock(&(IspInfo.SpinLockIsp));
-		} else {
-			LOG_ERR("copy_from_user	failed");
-			Ret = -EFAULT;
-		}
+		/*if (copy_from_user(&pid, (void *)Param, sizeof(MUINT32)) == 0) {
+		 *	spin_lock(&(IspInfo.SpinLockIsp));
+		 *	getTaskInfo((pid_t) pid);
+		 *
+		 *	sendSignal();
+		 *
+		 *	LOG_DBG("[ISP_KERNEL_MOTIFY_SIGNAL_TEST]:0x08%x	", pid);
+		 *	spin_unlock(&(IspInfo.SpinLockIsp));
+		*} else {
+		*	LOG_ERR("copy_from_user	failed");
+		*	Ret = -EFAULT;
+		*}
+		*/
+		LOG_INF("Unsupport Cmd: ISP_SET_USER_PID");
+		Ret = -EFAULT;
 		break;
 #endif
 	case ISP_BUFFER_CTRL:
@@ -11062,8 +11061,6 @@ static long ISP_ioctl_compat(struct file *filp, unsigned int cmd, unsigned long 
 				return -EFAULT;
 
 			err = compat_get_isp_buf_ctrl_struct_data(data32, data);
-			if (err)
-				return err;
 			if (err) {
 				LOG_INF("compat_get_isp_buf_ctrl_struct_data error!!!\n");
 				return err;
@@ -11198,6 +11195,7 @@ static MINT32 ISP_open(struct inode *pInode, struct file *pFile)
 	MUINT32 i;
 	int q = 0, p = 0;
 	ISP_USER_INFO_STRUCT *pUserInfo;
+	char mode = 0;
 
 	LOG_INF("- E. UserCount: %d.", IspInfo.UserCount);
 	/*      */
@@ -11229,6 +11227,10 @@ static MINT32 ISP_open(struct inode *pInode, struct file *pFile)
 		LOG_DBG("Curr UserCount(%d), (process, pid, tgid)=(%s, %d, %d),	first user",
 			IspInfo.UserCount, current->comm, current->pid, current->tgid);
 	}
+	mode = 1;
+	LOG_DBG("before exec_ccci_kern_func_by_md_id enable");
+	exec_ccci_kern_func_by_md_id(0, ID_MD_RF_DESENSE, &mode, sizeof(int));
+	LOG_DBG("after exec_ccci_kern_func_by_md_id enable");
 
 	/* kernel log */
 #if (LOG_CONSTRAINT_ADJ == 1)
@@ -11383,6 +11385,7 @@ static MINT32 ISP_release(struct inode *pInode, struct file *pFile)
 	ISP_USER_INFO_STRUCT *pUserInfo;
 	MUINT32 Reg;
 	MUINT32 i = 0;
+	char mode = 0;
 
 	LOG_INF("- E. UserCount: %d.", IspInfo.UserCount);
 	/*      */
@@ -11452,6 +11455,10 @@ static MINT32 ISP_release(struct inode *pInode, struct file *pFile)
 	ISP_WR32(ISP_ADDR + 0x4a00, 0x00000001);
 	LOG_DBG("ISP_MCLK1_EN Release");
 	ISP_BufWrite_Free();
+	mode = 0;
+	LOG_DBG("before exec_ccci_kern_func_by_md_id disable");
+	exec_ccci_kern_func_by_md_id(0, ID_MD_RF_DESENSE, &mode, sizeof(int));
+	LOG_DBG("after exec_ccci_kern_func_by_md_id disable");
 
 #if (LOG_CONSTRAINT_ADJ == 1)
 	set_detect_count(g_log_def_constraint);

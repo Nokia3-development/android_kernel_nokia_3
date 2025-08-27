@@ -587,6 +587,7 @@ static int rt9458_parse_dt(struct rt9458_info *info, struct device *dev)
 
 	//struct device_node *np = dev->of_node;
 
+	//Jason.
 	/* check customer setting */
 	struct device_node *np; 
 	np = of_find_compatible_node(NULL, NULL, "richtek,rt9458");
@@ -799,6 +800,7 @@ static int rt_charger_enable_otg(struct mtk_charger_info *mchr_info, void *data)
 
 	pr_info("%s: enable = %d\n", __func__, enable);
 
+	//Jason:
 	if (enable) {
 		rt9458_clr_bit(info, RT9458_REG_CTRL2, RT9458_MASK_HZ_EN);
 		rt9458_clr_bit(info, RT9458_REG_CTRL7, RT9458_MASK_CHG_EN);
@@ -1028,8 +1030,14 @@ static int rt_charger_dump_register(struct mtk_charger_info *mchr_info,
 	enum rt9458_charging_status chg_status = RT9458_CHG_STATUS_READY;
 
 	ret = rt9458_get_charging_status(info, &chg_status);
-	for (i = 0; i < ARRAY_SIZE(rt9458_reg_addr); i++)
-		ret = rt9458_i2c_read_byte(info, rt9458_reg_addr[i]);
+#if !defined(CONFIG_FIH_PROJECT_NE1)
+	if (chg_status == RT9458_CHG_STATUS_FAULT) {
+#endif
+		for (i = 0; i < ARRAY_SIZE(rt9458_reg_addr); i++)
+			ret = rt9458_i2c_read_byte(info, rt9458_reg_addr[i]);
+#if !defined(CONFIG_FIH_PROJECT_NE1)
+	}
+#endif
 
 	ret = rt_charger_get_ichg(&info->mchr_info, &ichg);
 	ret = rt9458_get_mivr(info, &mivr);
@@ -1045,54 +1053,6 @@ static int rt_charger_dump_register(struct mtk_charger_info *mchr_info,
 		__func__, chg_enable, rt9458_chg_status_name[chg_status]);
 
 	return ret;
-}
-int mtk_charger_sw_init1(struct mtk_charger_info *mchr_info, void *data)
-{
-		int i = 0, ret = 0;
-		u32 ichg = 0, aicr = 0, mivr = 0, ieoc = 0;
-		bool chg_enable = 0;
-		bool chg_force_disable = 0;
-		struct rt9458_info *info = (struct rt9458_info *)mchr_info;
-		enum rt9458_charging_status chg_status = RT9458_CHG_STATUS_READY;
-
-		ret = rt9458_set_aicr_int(info, true);
-		ret = rt9458_set_battery_vmreg(info, 4450000);
-		
-		ret = rt9458_get_charging_status(info, &chg_status);
-		if (chg_status == RT9458_CHG_STATUS_FAULT) {
-			for (i = 0; i < ARRAY_SIZE(rt9458_reg_addr); i++)
-				ret = rt9458_i2c_read_byte(info, rt9458_reg_addr[i]);
-		}
-
-
-	
-		ret = rt_charger_get_ichg(&info->mchr_info, &ichg);
-		      rt_charger_set_ichg(&info->mchr_info, &ichg);
-		
-		ret = rt9458_get_mivr(info, &mivr);
-		      rt_charger_set_mivr(&info->mchr_info, &mivr);
-		
-		ret = rt_charger_get_aicr(&info->mchr_info, &aicr);
-		      rt_charger_set_aicr(&info->mchr_info, &aicr);
-			  
-		ret = rt9458_get_ieoc(info, &ieoc);
-		      rt9458_set_ieoc(info, ieoc);
-		
-		ret = rt9458_is_charging_enable(info, &chg_enable);
-		rt_charger_enable_hz(&info->mchr_info,&chg_force_disable);
-		rt_charger_enable_otg(&info->mchr_info,&chg_force_disable);
-		//rt_charger_enable_charging(&info->mchr_info,&chg_force_enable);
-	
-		pr_info("%s: sunjie ICHG = %dmA, AICR = %d%smA, MIVR = %dmV, IEOC = %dmA\n",
-			__func__, ichg / 100, aicr / 100,
-			(aicr == 0 ? "(unlimited)" : ""), mivr / 1000, ieoc / 1000);
-	
-		pr_info("%s: sunjie CHG_EN = %d, CHG_STATUS = %s\n",
-			__func__, chg_enable, rt9458_chg_status_name[chg_status]);
-	
-
-
-	return 0;
 }
 
 static int rt9458_init_setting(struct rt9458_info *info)
@@ -1217,6 +1177,7 @@ static int rt_charger_run_aicl(struct mtk_charger_info *mchr_info, void *data)
 		aicr = 70000;
 	else if (aicr == 70000) /* from 700mA to 500mA */
 		aicr = 50000;
+//
 //	else if (aicr == 50000) /* from 500mA to 100mA */
 //		aicr = 10000;
 	else { /* already the smallest value */
@@ -1268,7 +1229,7 @@ static const mtk_charger_intf rt9458_mchr_intf[CHARGING_CMD_NUMBER] = {
 	 * The following interfaces are not related to charger
 	 * Define in mtk_charger_intf.c
 	 */
-	[CHARGING_CMD_SW_INIT] = mtk_charger_sw_init1,
+	[CHARGING_CMD_SW_INIT] = mtk_charger_sw_init,
 	[CHARGING_CMD_SET_HV_THRESHOLD] = mtk_charger_set_hv_threshold,
 	[CHARGING_CMD_GET_HV_STATUS] = mtk_charger_get_hv_status,
 	[CHARGING_CMD_GET_BATTERY_STATUS] = mtk_charger_get_battery_status,
@@ -1341,11 +1302,11 @@ static int rt9458_probe(struct i2c_client *client,
 	/* Hook chr_control_interface with battery's interface */
 	info->mchr_info.mchr_intf = rt9458_mchr_intf;
 	mtk_charger_set_info(&info->mchr_info);
-		
+
 	if (battery_charging_control == NULL) {
 		battery_charging_control = rt9458_chr_control_interface;
-	}		
-		
+	}
+
 	chargin_hw_init_done = KAL_TRUE;
 
 	pr_info("%s: ends\n", __func__);

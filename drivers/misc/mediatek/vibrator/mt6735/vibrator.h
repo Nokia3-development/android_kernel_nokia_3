@@ -40,3 +40,9 @@ struct vibrator_hw {
 };
 
 #endif
+
+#define BBOX_HAPTIC_PROBE_FAIL do {printk("BBox::UEC;19::0\n");} while (0);
+#define BBOX_HAPTIC_SET_FAIL do {printk("BBox::UEC;19::2\n");} while (0);
+#define BBOX_HAPTIC_WRITE_REGISTER_FAIL do {printk("BBox::UEC;19::7\n");} while (0);
+#define BBOX_HAPTIC_ENABLE_FAIL do {printk("BBox::UEC;19::3\n");} while (0);
+#define BBOX_HAPTIC_SET_REGULATOR_FAIL do {printk("BBox::UEC;19::8\n");} while (0);

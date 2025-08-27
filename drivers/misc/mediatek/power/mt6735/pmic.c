@@ -3221,6 +3221,12 @@ void homekey_int_handler_r(void)
 #endif
 }
 
+#if defined(CONFIG_MTK_BQ24157_SUPPORT)
+//
+extern unsigned short fih_hwid;
+extern void bq24157_set_reset(unsigned int val);
+#endif
+
 void chrdet_int_handler(void)
 {
 	PMICLOG("[chrdet_int_handler]CHRDET status = %d....\n",
@@ -3235,6 +3241,12 @@ void chrdet_int_handler(void)
 		if (boot_mode == KERNEL_POWER_OFF_CHARGING_BOOT
 		    || boot_mode == LOW_POWER_OFF_CHARGING_BOOT) {
 			PMICLOG("[chrdet_int_handler] Unplug Charger/USB\n");
+#if defined(CONFIG_MTK_BQ24157_SUPPORT)
+			if (fih_hwid <= 0x113) {
+				if (chargin_hw_init_done == KAL_TRUE)// charger IC driver init is OK.
+					bq24157_set_reset(1);
+			}
+#endif
 			mt_power_off();
 		}
 	}
@@ -3430,11 +3442,12 @@ static void pmic_int_handler(void)
 		int_status_val = upmu_get_reg_value(interrupts[i].address);
 		if (int_status_val) {
 			if (interrupts[i].address == MT6328_INT_STATUS0 &&
-			    (int_status_val == 0x40 || int_status_val == 0x80) &&
-			    __ratelimit(&ratelimit)) {
-				/* limit log of BAT_H/BAT_L */
-				pr_err(PMICTAG "[PMIC_INT] addr[0x%x]=0x%x\n",
-					interrupts[i].address, int_status_val);
+			    (int_status_val == 0x40 || int_status_val == 0x80)) {
+				if (__ratelimit(&ratelimit)) {
+					/* limit log of BAT_H/BAT_L */
+					pr_err(PMICTAG "[PMIC_INT] addr[0x%x]=0x%x\n",
+						interrupts[i].address, int_status_val);
+				}
 			} else {
 				pr_err(PMICTAG "[PMIC_INT] addr[0x%x]=0x%x\n",
 					interrupts[i].address, int_status_val);

@@ -1069,28 +1069,6 @@ static int fh_dvfs_proc_read(struct seq_file *m, void *v)
 static int fh_dvfs_proc_write(struct file *file, const char *buffer, unsigned long count,
 			      void *data)
 {
-	unsigned int p1, p2, p3, p4, p5;
-
-	p1 = p2 = p3 = p4 = p5 = 0;
-
-	FH_MSG("EN: %s", __func__);
-
-	if (count == 0)
-		return -1;
-
-	FH_MSG("EN: p1=%d p2=%d p3=%d", p1, p2, p3);
-
-	switch (p1) {
-	case FH_ARM_PLLID:
-		FH_MSG("MEMPLL Slope change enter\n");
-		mt_fh_hal_dfs_mempll((fh_read32(REG_FHCTL2_DDS) & MASK21b));
-		FH_MSG("MEMPLL Slope change completed\n");
-
-		/* mt_fh_hal_dfs_armpll(p2, p3); */
-		/* FH_MSG("ARMPLL DFS completed\n"); */
-		break;
-	};
-
 	return count;
 }
 

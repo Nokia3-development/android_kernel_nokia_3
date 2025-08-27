@@ -38,6 +38,7 @@ static const struct of_device_id bq24157_of_match[] = {
 
 MODULE_DEVICE_TABLE(of, bq24157_of_match);
 
+//add 
 struct of_device_id charger_of_match[] = {
     {.compatible = "mediatek,charger_bq24157"},
 	{},
@@ -80,6 +81,7 @@ int bq24157_read_byte(unsigned char cmd, unsigned char *returnData)
 
 	mutex_lock(&bq24157_i2c_access);
 
+	//
 	if (new_client == NULL) {
 		battery_log(BAT_LOG_CRTI, "[bq24157_read_byte]:failed, new_client is NULL\n");
 
@@ -118,6 +120,7 @@ int bq24157_write_byte_base(unsigned char cmd, unsigned char writeData)
 	write_data[0] = cmd;
 	write_data[1] = writeData;
 
+	//
 	if (new_client == NULL) {
 		battery_log(BAT_LOG_CRTI, "[bq24157_write_byte_base]:failed, new_client is NULL\n");
 
@@ -125,10 +128,12 @@ int bq24157_write_byte_base(unsigned char cmd, unsigned char writeData)
 		return 0;
 	}
 
+
 	new_client->ext_flag = ((new_client->ext_flag) & I2C_MASK_FLAG) | I2C_DIRECTION_FLAG;
 
 	ret = i2c_master_send(new_client, write_data, 2);
 	if (ret < 0) {
+
 		new_client->ext_flag = 0;
 		mutex_unlock(&bq24157_i2c_access);
 		return 0;
@@ -623,7 +628,52 @@ static int bq24157_driver_probe(struct i2c_client *client, const struct i2c_devi
   *
   *********************************************************/
 unsigned char g_reg_value_bq24157 = 0;
+static ssize_t show_bq24157_access(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	battery_log(BAT_LOG_CRTI, "[show_bq24157_access] 0x%x\n", g_reg_value_bq24157);
+	return sprintf(buf, "%u\n", g_reg_value_bq24157);
+}
 
+static ssize_t store_bq24157_access(struct device *dev, struct device_attribute *attr,
+				    const char *buf, size_t size)
+{
+	int ret = 0;
+	char *pvalue = NULL, *addr, *val;
+	unsigned int reg_value = 0;
+	unsigned int reg_address = 0;
+
+	battery_log(BAT_LOG_CRTI, "[store_bq24157_access]\n");
+
+	if (buf != NULL && size != 0) {
+
+		pvalue = (char *)buf;
+		if (size > 3) {
+			addr = strsep(&pvalue, " ");
+			ret = kstrtou32(addr, 16, (unsigned int *)&reg_address);
+		} else
+			ret = kstrtou32(pvalue, 16, (unsigned int *)&reg_address);
+
+		if (size > 3) {
+			val = strsep(&pvalue, " ");
+			ret = kstrtou32(val, 16, (unsigned int *)&reg_value);
+
+			battery_log(BAT_LOG_CRTI,
+			    "[store_bq24157_access] write bq24157 reg 0x%x with value 0x%x !\n",
+			     reg_address, reg_value);
+			ret = bq24157_config_interface(reg_address, reg_value, 0xFF, 0x0);
+		} else {
+			ret = bq24157_read_interface(reg_address, &g_reg_value_bq24157, 0xFF, 0x0);
+			battery_log(BAT_LOG_CRTI,
+			    "[store_bq24157_access] read bq24157 reg 0x%x with value 0x%x !\n",
+			     reg_address, g_reg_value_bq24157);
+			battery_log(BAT_LOG_CRTI,
+			    "[store_bq24157_access] Please use \"cat bq24157_access\" to get value\r\n");
+		}
+	}
+	return size;
+}
+
+static DEVICE_ATTR(bq24157_access, 0664, show_bq24157_access, store_bq24157_access);	/* 664 */
 
 /**********************************************************
   *
@@ -680,14 +730,61 @@ int charger_get_gpio_info(struct platform_device *pdev)
     return 0;
 }
 
+static int bq24157_user_space_probe(struct platform_device *dev)
+{
+	int ret_device_file = 0;
+
+	battery_log(BAT_LOG_CRTI, "******** bq24157_user_space_probe!! ********\n");
+	charger_get_gpio_info(dev);
+	ret_device_file = device_create_file(&(dev->dev), &dev_attr_bq24157_access);
+
+	return 0;
+}
 
 struct platform_device bq24157_user_space_device = {
 	.name = "bq24157-user",
 	.id = -1,
 };
 
+static struct platform_driver bq24157_user_space_driver = {
+	.probe = bq24157_user_space_probe,
+	.driver = {
+        .name = "bq24157-user",
+        .of_match_table = charger_of_match, /*add for charger IC GPIO_CD*/
+	},
+};
+
+//
+extern unsigned short fih_hwid;
 static int __init bq24157_init(void)
 {
+	int ret = 0;
+	if (fih_hwid > 0x113) {
+		printk("[bq24157_init] Jason: return..........\n");
+		return 0;
+	}
+
+	if (i2c_add_driver(&bq24157_driver) != 0) {
+		battery_log(BAT_LOG_CRTI, "[bq24157_init] failed to register bq24157 i2c driver.\n");
+	} else {
+		battery_log(BAT_LOG_CRTI, "[bq24157_init] Success to register bq24157 i2c driver.\n");
+	}
+
+	/* bq24157 user space access interface */
+	//drop for CONFIG_OF.
+	/*
+	ret = platform_device_register(&bq24157_user_space_device);
+	if (ret) {
+		battery_log(BAT_LOG_CRTI, "****[bq24157_init] Unable to device register(%d)\n", ret);
+		return ret;
+	}
+    */
+	ret = platform_driver_register(&bq24157_user_space_driver);
+	if (ret) {
+		battery_log(BAT_LOG_CRTI, "****[bq24157_init] Unable to register driver (%d)\n", ret);
+		return ret;
+	}
+
 	return 0;
 }
 

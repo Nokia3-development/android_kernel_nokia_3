@@ -82,6 +82,7 @@ static atomic_t g_CAM_CALatomic;
 #define S5K4H8_OTP_INFO_ADDR               0x0A05
 #define S5K4H8_OTP_VCMFLAG_ADDR            0x0A13
 #define S5K4H8_OTP_VCM_ADDR                0x0A13
+#define HWID 								0x121
 
 
 #define MAX_OTP_SIZE 16
@@ -105,6 +106,7 @@ S5K4H8_OTP_DATA s5k4h8_otp_data = {0,};
 extern int iReadReg(u16 a_u2Addr , u8 * a_puBuff , u16 i2cId);
 //extern int iWriteReg(u16 a_u2Addr , u32 a_u4Data , u32 a_u4Bytes , u16 i2cId);
 extern int iWriteReg_otp(u16 a_u2Addr , u32 a_u4Data , u32 a_u4Bytes , u16 i2cId , char * sensorname );
+extern unsigned short fih_hwid;
 
 
 #define write_cmos_sensor_evt(addr, para) iWriteReg_otp((u16) addr , (u32) para , 1, S5K4H8_OTP_DEVICE_EVT_ID,IMGSENSOR_DRVNAME)//add for write evt-DUT i2c
@@ -114,30 +116,37 @@ extern int iWriteReg_otp(u16 a_u2Addr , u32 a_u4Data , u32 a_u4Bytes , u16 i2cId
 
 static u8 read_cmos_sensor(kal_uint16 addr)
 {
-	u8 data = 0;
-
+    u8  data = 0;
 	//char pu_send_cmd[2] = {(char)(addr >> 8) , (char)(addr & 0xFF) };
-	if( iReadReg(addr, &data, S5K4H8_OTP_DEVICE_ID) )
+	if ( fih_hwid <= HWID)
 	{
-		CAM_CALDB("[s5k4h8_otp]read_cmos_sensor i2c read error\n");
-		return 0;
-	}//0 for good
-
-	CAM_CALDB("[s5k4h8_otp]read_cmos_sensor addr=0x%x, data=0x%x\n", addr, data);
-	return data;
+		if( iReadReg(addr, &data, S5K4H8_OTP_DEVICE_EVT_ID) )
+		{
+			CAM_CALDB("[s5k4h8_otp]read_cmos_sensor i2c read error\n");
+			return 0;
+		}//0 for good
+	} else{
+		if( iReadReg(addr, &data, S5K4H8_OTP_DEVICE_ID) )
+		{
+			CAM_CALDB("[s5k4h8_otp]read_cmos_sensor i2c read error\n");
+			return 0;
+		}//0 for good
+	
+	}
+ CAM_CALDB("[s5k4h8_otp]read_cmos_sensor addr=0x%x, data=0x%x\n", addr, data);
+    return data;
 }
 
-int read_s5k4h8_otp_data(void)
-{
+int read_s5k4h8_otp_data(void){
 	int i = 0;
 	int offset = 0;
 	int val = 0;
 
     CAM_CALDB("[s5k4h8_otp]read_s5k4h8_otp_data start!!!\n");
     memset(&s5k4h8_otp_data,0,sizeof(S5K4H8_OTP_DATA));
-
-	write_cmos_sensor(0x0100,0x01);
-	mdelay(10);
+	if(fih_hwid >= HWID){
+		write_cmos_sensor(0x0100,0x01);
+		mdelay(10);
 
     for (i=0;i<64;i++)
     {
@@ -189,7 +198,68 @@ int read_s5k4h8_otp_data(void)
     s5k4h8_otp_data.vcm_inf = (read_cmos_sensor(S5K4H8_OTP_VCM_ADDR+offset+0)<<2)+((val&0xC0)>>6);
     s5k4h8_otp_data.vcm_mac = (read_cmos_sensor(S5K4H8_OTP_VCM_ADDR+offset+1)<<2)+((val&0x30)>>4);
 
-	write_cmos_sensor(0x0A00,0x00); 
+		write_cmos_sensor(0x0A00,0x00); 
+	}else{
+		write_cmos_sensor_evt(0x0100,0x01);
+		mdelay(10);
+
+		for (i=0;i<64;i++)
+		{
+			write_cmos_sensor_evt(0x0A04+i,0x00);
+		}
+
+		write_cmos_sensor_evt(0x0A02,0x0F); //set page 15
+		write_cmos_sensor_evt(0x0A00,0x01); 
+		mdelay(20);
+
+		s5k4h8_otp_data.infoflag = read_cmos_sensor(S5K4H8_OTP_INFOFLAG_ADDR);
+		CAM_CALERR("[s5k4h8_otp]read_s5k4h8_otp infoflag=0x%x\n", s5k4h8_otp_data.infoflag);
+		if( (s5k4h8_otp_data.infoflag>>4 & 0x0C) == 0x04 )
+		{
+			offset = 0;
+		}
+		else if( (s5k4h8_otp_data.infoflag>>4 & 0x03) == 0x01 )
+		{
+			offset = 0x07;
+		}
+		else
+		{
+			CAM_CALERR("[s5k4h8_otp]read_s5k4h8_otp_data fail empty!!!\n");
+			return -1;
+		}
+		s5k4h8_otp_data.module_integrator_id = read_cmos_sensor(S5K4H8_OTP_INFO_ADDR+offset);
+		s5k4h8_otp_data.lens_vcm_id = read_cmos_sensor(S5K4H8_OTP_INFO_ADDR+offset+1);
+		val = read_cmos_sensor(S5K4H8_OTP_INFO_ADDR+offset+5);
+		s5k4h8_otp_data.wb_rg_ratio = (read_cmos_sensor(S5K4H8_OTP_INFO_ADDR+offset+2)<<2)+((val&0xC0)>>6);
+		s5k4h8_otp_data.wb_bg_ratio = (read_cmos_sensor(S5K4H8_OTP_INFO_ADDR+offset+3)<<2)+((val&0x30)>>4);
+		s5k4h8_otp_data.wb_gg_ratio = (read_cmos_sensor(S5K4H8_OTP_INFO_ADDR+offset+4)<<2)+((val&0x0C)>>2);
+
+		s5k4h8_otp_data.vcmflag = read_cmos_sensor(S5K4H8_OTP_VCMFLAG_ADDR);
+		CAM_CALERR("[s5k4h8_otp]read_s5k4h8_otp vcmflag=0x%x\n", s5k4h8_otp_data.vcmflag);
+		if( (s5k4h8_otp_data.vcmflag & 0xc0) == 0x40 )
+		{
+			offset = 0x01;
+		}
+		else if( (s5k4h8_otp_data.vcmflag & 0x30) == 0x10 )
+		{
+			offset = 0x05;
+		}
+		else
+		{
+			CAM_CALERR("[s5k4h8_otp]read_s5k4h8_otp_data fail vcm empty!!!\n");
+			return -1;
+		}
+		val = read_cmos_sensor(S5K4H8_OTP_VCM_ADDR+offset+2);
+		s5k4h8_otp_data.vcm_inf = (read_cmos_sensor(S5K4H8_OTP_VCM_ADDR+offset+0)<<2)+((val&0xC0)>>6);
+		s5k4h8_otp_data.vcm_mac = (read_cmos_sensor(S5K4H8_OTP_VCM_ADDR+offset+1)<<2)+((val&0x30)>>4);
+
+		write_cmos_sensor_evt(0x0A00,0x00); 
+
+	
+	}
+	
+	
+	
 
     spin_lock(&g_CAM_CALLock);
     s5k4h8_otp_read = 1;
@@ -243,9 +313,12 @@ static long s5k4h8otp_Ioctl_Compat(struct file *filp, unsigned int cmd, unsigned
     COMPAT_stCAM_CAL_INFO_STRUCT __user *data32;
     stCAM_CAL_INFO_STRUCT __user *data;
     int err;
-
+	if ( fih_hwid >= HWID)
+	{	
 	CAM_CALDB("[s5k4h8_otp] s5k4h8_otp_DEVICE_ID,%p %p %x ioc size %d\n",filp->f_op ,filp->f_op->unlocked_ioctl,cmd,_IOC_SIZE(cmd) );
-
+	}else{
+	CAM_CALDB("[s5k4h8_otp] S5K4H8_OTP_DEVICE_EVT_ID,%p %p %x ioc size %d\n",filp->f_op ,filp->f_op->unlocked_ioctl,cmd,_IOC_SIZE(cmd) );	
+	}
     if (!filp->f_op || !filp->f_op->unlocked_ioctl)
         return -ENOTTY;
 

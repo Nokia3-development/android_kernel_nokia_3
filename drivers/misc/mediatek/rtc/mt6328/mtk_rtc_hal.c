@@ -40,6 +40,7 @@
 
 #include <mt_gpio.h>
 #include <mt-plat/charging.h>
+#include <mt-plat/upmu_common.h>
 
 #define hal_rtc_xinfo(fmt, args...)		\
 	pr_notice(fmt, ##args)
@@ -118,7 +119,14 @@ u16 rtc_spare_reg[][3] = {
 	{RTC_PDN2, 0x1, 15},
 	{RTC_SPAR0, 0x1, 6},
 	{RTC_SPAR0, 0x1, 7},
-	{RTC_AL_DOM, 0x7f, 8}
+
+	/*Begin, for reboot command, 20190104*/
+	{RTC_SPAR0, 0x1, 14},	//FTM
+	{RTC_SPAR0, 0x1, 15},	//META
+	{RTC_SPAR0, 0x1, 12},	//Preloader
+	{RTC_SPAR0, 0x1, 11},	//RAMTEST
+	{RTC_AL_DOM, 0x7f, 8}	//add for vbat
+	/*End, for reboot command, 20190104*/
 };
 
 void hal_rtc_set_abb_32k(u16 enable)
@@ -188,6 +196,8 @@ void hal_rtc_bbpu_pwdn(void)
 		/* 1.   Set SRCLKENAs GPIO GPIO as Output Mode, Output Low */
 		mt_set_gpio_dir(GPIO_SRCLKEN_PIN, GPIO_DIR_OUT);
 		mt_set_gpio_out(GPIO_SRCLKEN_PIN, GPIO_OUT_ZERO);
+		/* Keep PMIC in normal mode */
+		pmic_config_interface_nolock(0x0204, 0x103, 0xffff, 0);
 		/* 2. pull PWRBB low */
 		rtc_bbpu_pwrdown(true);
 

@@ -14,6 +14,7 @@ config MTK_CHARGER_INTERFACE
 	  Say n and choose other chargers and interface.
 	  Do not select this module if you've ported your own interface.
 
+# 
 config CHARGER_RT9458
 	bool "RT9458_SUPPORT"
 	select MTK_SWITCH_INPUT_OUTPUT_CURRENT_SUPPORT
@@ -46,6 +47,7 @@ config MTK_BQ25896_SUPPORT
 	Set n and choose other chargers.
 	This driver uses I2c bus.
 
+# add 
 config MTK_BQ24157_SUPPORT
 	bool "MTK_BQ24157_SUPPORT"
 	default n

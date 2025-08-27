@@ -386,6 +386,42 @@ void rtc_mark_fast(void)
 	spin_unlock_irqrestore(&rtc_lock, flags);
 }
 
+/*Begin, for reboot command, 20190104*/
+void rtc_mark_ftm(void)
+{
+	unsigned long flags;
+	rtc_xinfo("rtc_mark_ftm\n");
+	spin_lock_irqsave(&rtc_lock, flags);
+	hal_rtc_set_spare_register(RTC_SPAR0_FIH_FTM, 0x1);
+	spin_unlock_irqrestore(&rtc_lock, flags);
+}
+
+void rtc_mark_meta(void)
+{
+	unsigned long flags;
+	rtc_xinfo("rtc_mark_meta\n");
+	spin_lock_irqsave(&rtc_lock, flags);
+	hal_rtc_set_spare_register(RTC_SPAR0_FIH_META, 0x1);
+	spin_unlock_irqrestore(&rtc_lock, flags);
+}
+
+void rtc_mark_preloader(void)
+{
+	unsigned long flags;
+	rtc_xinfo("rtc_mark_preloader\n");
+	spin_lock_irqsave(&rtc_lock, flags);
+	hal_rtc_set_spare_register(RTC_SPAR0_FIH_PRELOADER, 0x1);
+	spin_unlock_irqrestore(&rtc_lock, flags);
+}
+
+void rtc_mark_ramtest(void)
+{
+        unsigned long flags;
+        rtc_xinfo("rtc_mark_ramtest\n");
+        spin_lock_irqsave(&rtc_lock, flags);
+        hal_rtc_set_spare_register(RTC_SPAR0_FIH_RAMTEST, 0x1);
+        spin_unlock_irqrestore(&rtc_lock, flags);
+}
 
 int get_rtc_spare_vbat_value(void)
 {
@@ -412,6 +448,7 @@ int set_rtc_spare_vbat_value(int val)
         
         return 0;
 }
+/*End, for reboot command, 20190104*/
 
 u16 rtc_rdwr_uart_bits(u16 *val)
 {

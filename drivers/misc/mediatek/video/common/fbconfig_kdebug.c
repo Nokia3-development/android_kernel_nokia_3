@@ -186,24 +186,6 @@ void Panel_Master_DDIC_config(void)
 	mutex_unlock(&fb_config_lock);
 }
 
-/*static void print_from_head_to_tail(void)
-{
-	int i;
-	struct list_head *p;
-	CONFIG_RECORD_LIST *print;
-	pr_debug("DDIC=====>:print_from_head_to_tail  START\n");
-
-	list_for_each_prev(p, &head_list.list) {
-		print = list_entry(p, CONFIG_RECORD_LIST, list);
-		pr_debug("type:%d num %d value:\r\n", print->record.type, print->record.ins_num);
-		for (i = 0; i < print->record.ins_num; i++)
-			pr_debug("0x%x\t", print->record.ins_array[i]);
-		pr_debug("\r\n");
-	}
-	pr_debug("DDIC=====>:print_from_head_to_tail  END\n");
-
-}*/
-
 static void free_list_memory(void)
 {
 	struct list_head *p, *n;
@@ -535,7 +517,7 @@ static long fbconfig_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		}
 		if (esd_para.para_num <= 0 || esd_para.para_num > 100) {
 			pr_debug("fbconfig=>LCM_GET_ESD para_num:%d < 0\n", esd_para.para_num);
-			return -1;
+			return -EINVAL;
 		}
 
 		buffer_size = esd_para.para_num + 6;

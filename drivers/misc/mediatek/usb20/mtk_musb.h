@@ -67,6 +67,7 @@ typedef enum {
 } usb_state_enum;
 
 /* USB phy and clock */
+extern bool usb_pre_clock(bool enable);
 extern void usb_phy_poweron(void);
 extern void usb_phy_recover(void);
 extern void usb_phy_savecurrent(void);
@@ -101,4 +102,8 @@ extern void switch_int_to_device(struct musb *musb);
 extern void switch_int_to_host(struct musb *musb);
 extern void switch_int_to_host_and_mask(struct musb *musb);
 extern void musb_session_restart(struct musb *musb);
+#ifdef CONFIG_DUAL_ROLE_USB_INTF
+extern int mt_usb_dual_role_init(struct musb *musb);
+extern int mt_usb_dual_role_changed(struct musb *musb);
+#endif /* CONFIG_DUAL_ROLE_USB_INTF */
 #endif

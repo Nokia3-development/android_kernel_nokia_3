@@ -606,6 +606,25 @@ void arch_reset(char mode, const char *cmd)
 	} else if (cmd && !strcmp(cmd, "rpmbpk")) {
 		mtk_wd_SetNonResetReg2(0x0, 1);
 #endif
+	}
+	/*Begin: add for ScsiCmdAgent tool, 20190104*/
+	else if(cmd && !strcmp(cmd, "ftm"))      //FTM
+	{
+		rtc_mark_ftm();
+	}
+	else if(cmd && !strcmp(cmd, "meta")) 	    //META TOOL
+	{
+		rtc_mark_meta();
+	}
+	else if(cmd && !strcmp(cmd, "preloader"))  //Preloader
+	{
+		rtc_mark_preloader();
+	}
+    else if(cmd && !strcmp(cmd, "memory_test"))      //RAMTEST
+	{
+        rtc_mark_ramtest();
+
+	/*End: add for ScsiCmdAgent tool, 20190104*/
 	} else {
 		reboot = 1;
 	}

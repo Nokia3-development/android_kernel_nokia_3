@@ -1100,7 +1100,7 @@ static int ovl_config_l(DISP_MODULE_ENUM module, disp_ddp_path_config *pConfig, 
 					 pConfig->ovl_config[i].key, pConfig->ovl_config[i].aen,
 					 pConfig->ovl_config[i].alpha, pConfig->ovl_config[i].sur_aen,
 					 pConfig->ovl_config[i].src_alpha, pConfig->ovl_config[i].dst_alpha,
-					 0xff000000,	/* constant_color */
+					 0xff000000 | pConfig->ovl_config[i].dim_color,	/* constant_color */
 					 pConfig->ovl_config[i].yuv_range,
 					 pConfig->ovl_config[i].security, has_sec_layer, handle, pConfig->is_memory,
 					 pConfig->dst_w, pConfig->dst_h);

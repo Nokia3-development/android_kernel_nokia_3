@@ -1350,8 +1350,10 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			/* Try to prevent overrun */
 			dal_show->msg[sizeof(dal_show->msg) - 1] = 0;
 #ifdef CONFIG_MTK_FB
-			LOGD("AEE CALL DAL_Printf now\n");
-			DAL_Printf("%s", dal_show->msg);
+			if (!strncmp(current->comm, "aee_aed", 7)) {
+				LOGD("AEE CALL DAL_Printf now\n");
+				DAL_Printf("%s", dal_show->msg);
+			}
 #endif
 
  OUT:
@@ -1392,10 +1394,12 @@ static long aed_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				goto EXIT;
 			}
 #ifdef CONFIG_MTK_FB
-			LOGD("AEE CALL DAL_SetColor now\n");
-			DAL_SetColor(dal_setcolor.foreground, dal_setcolor.background);
-			LOGD("AEE CALL DAL_SetScreenColor now\n");
-			DAL_SetScreenColor(dal_setcolor.screencolor);
+			if (!strncmp(current->comm, "aee_aed", 7)) {
+				LOGD("AEE CALL DAL_SetColor now\n");
+				DAL_SetColor(dal_setcolor.foreground, dal_setcolor.background);
+				LOGD("AEE CALL DAL_SetScreenColor now\n");
+				DAL_SetScreenColor(dal_setcolor.screencolor);
+			}
 #endif
 			break;
 		}
@@ -1637,6 +1641,12 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 	int flags;
 	struct mm_struct *mm;
 	int ret = 0;
+	char tpath[512];
+	char *path_p = NULL;
+	struct path base_path;
+	unsigned long long pgoff = 0;
+	dev_t dev = 0;
+	unsigned long ino = 0;
 
 	current_task = get_current();
 	user_ret = task_pt_regs(current_task);
@@ -1646,7 +1656,7 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 	oops->userthread_maps.tid = current_task->tgid;
 
 	memcpy(&oops->userthread_reg.regs, user_ret, sizeof(struct pt_regs));
-	LOGE(" pid:%d /// tgid:%d, stack:0x%08lx\n",
+	pr_info(" pid:%d /// tgid:%d, stack:0x%08lx\n",
 			current_task->pid, current_task->tgid,
 			(long)oops->userthread_stack.Userthread_Stack);
 	if (!user_mode(user_ret))
@@ -1658,17 +1668,26 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 
 
 	#if 1
+	down_read(&current_task->mm->mmap_sem);
 	vma = current_task->mm->mmap;
 	while (vma && (mapcount < current_task->mm->map_count)) {
 		file = vma->vm_file;
 		flags = vma->vm_flags;
 		if (file) {
-			Log2Buffer(oops, "%08lx-%08lx %c%c%c%c    %s\n", vma->vm_start, vma->vm_end,
-					flags & VM_READ ? 'r' : '-',
+			struct inode *inode = file_inode(vma->vm_file);
+
+			dev = inode->i_sb->s_dev;
+			ino = inode->i_ino;
+			base_path = file->f_path;
+			path_p = d_path(&base_path, tpath, 512);
+			pgoff = ((loff_t)vma->vm_pgoff) << PAGE_SHIFT;
+			if (flags & VM_EXEC) { /* we only catch code section for reduce maps space */
+				Log2Buffer(oops, "%08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s\n", vma->vm_start,
+					vma->vm_end, flags & VM_READ ? 'r' : '-',
 					flags & VM_WRITE ? 'w' : '-',
 					flags & VM_EXEC ? 'x' : '-',
-					flags & VM_MAYSHARE ? 's' : 'p',
-					(unsigned char *)(file->f_path.dentry->d_iname));
+					flags & VM_MAYSHARE ? 's' : 'p',  pgoff, MAJOR(dev), MINOR(dev), ino, path_p);
+			}
 		} else {
 			const char *name = arch_vma_name(vma);
 
@@ -1687,27 +1706,26 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 				}
 			}
 			/* if (name) */
-			{
-
-				Log2Buffer(oops, "%08lx-%08lx %c%c%c%c    %s\n", vma->vm_start, vma->vm_end,
-						flags & VM_READ ? 'r' : '-',
-						flags & VM_WRITE ? 'w' : '-',
-						flags & VM_EXEC ? 'x' : '-',
-						flags & VM_MAYSHARE ? 's' : 'p', name);
+			if (flags & VM_EXEC) {
+				Log2Buffer(oops, "%08lx-%08lx %c%c%c%c %08llx %02x:%02x %lu %s\n", vma->vm_start,
+					vma->vm_end, flags & VM_READ ? 'r' : '-',
+					flags & VM_WRITE ? 'w' : '-',
+					flags & VM_EXEC ? 'x' : '-',
+					flags & VM_MAYSHARE ? 's' : 'p', pgoff, MAJOR(dev), MINOR(dev), ino, name);
 			}
 		}
 		vma = vma->vm_next;
 		mapcount++;
-
 	}
+	up_read(&current_task->mm->mmap_sem);
 	#endif
-
-	LOGE("maps addr(0x%08lx), maps len:%d\n",
+	oops->userthread_maps.Userthread_mapsLength = strlen(oops->userthread_maps.Userthread_maps);
+	pr_info("maps addr(0x%08lx), maps len:%d\n",
 			(long)oops->userthread_maps.Userthread_maps,
 			oops->userthread_maps.Userthread_mapsLength);
 
 #ifndef __aarch64__ /* 32bit */
-	LOGE(" pc/lr/sp 0x%08lx/0x%08lx/0x%08lx\n", user_ret->ARM_pc, user_ret->ARM_lr,
+	pr_info(" pc/lr/sp 0x%08lx/0x%08lx/0x%08lx\n", user_ret->ARM_pc, user_ret->ARM_lr,
 			 user_ret->ARM_sp);
 		userstack_start = (unsigned long)user_ret->ARM_sp;
 
@@ -1722,10 +1740,10 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 			break;
 	}
 	if (userstack_end == 0) {
-		LOGE("Dump native stack failed:\n");
+		pr_info("Dump native stack failed:\n");
 		return 0;
 	}
-	LOGE("Dump stack range (0x%08lx:0x%08lx)\n", userstack_start, userstack_end);
+	pr_info("Dump stack range (0x%08lx:0x%08lx)\n", userstack_start, userstack_end);
 	length = ((userstack_end - userstack_start) <
 		     (MaxStackSize-1)) ? (userstack_end - userstack_start) : (MaxStackSize-1);
 	oops->userthread_stack.StackLength = length;
@@ -1733,12 +1751,12 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 
 	ret = copy_from_user((void *)(oops->userthread_stack.Userthread_Stack),
 			(const void __user *)(userstack_start), length);
-	LOGE("u+k 32 copy_from_user ret(0x%08x),len:%lx\n", ret, length);
-	LOGE("end dump native stack:\n");
+	pr_info("u+k 32 copy_from_user ret(0x%08x),len:%lx\n", ret, length);
+	pr_info("end dump native stack:\n");
 #else /* 64bit, First deal with K64+U64, the last time to deal with K64+U32 */
 
 	if (is_compat_task()) {	/* K64_U32 */
-		LOGE(" K64+ U32 pc/lr/sp 0x%16lx/0x%16lx/0x%16lx\n",
+		pr_info(" K64+ U32 pc/lr/sp 0x%16lx/0x%16lx/0x%16lx\n",
 				(long)(user_ret->user_regs.pc),
 				(long)(user_ret->user_regs.regs[14]),
 				(long)(user_ret->user_regs.regs[13]));
@@ -1754,18 +1772,18 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 			break;
 	}
 	if (userstack_end == 0) {
-		LOGE("Dump native stack failed:\n");
+		pr_info("Dump native stack failed:\n");
 		return 0;
 	}
-	LOGE("Dump stack range (0x%08lx:0x%08lx)\n", userstack_start, userstack_end);
+	pr_info("Dump stack range (0x%08lx:0x%08lx)\n", userstack_start, userstack_end);
 		length = ((userstack_end - userstack_start) <
 		     (MaxStackSize-1)) ? (userstack_end - userstack_start) : (MaxStackSize-1);
 		oops->userthread_stack.StackLength = length;
 		ret = copy_from_user((void *)(oops->userthread_stack.Userthread_Stack),
 				(const void __user *)(userstack_start), length);
-		LOGE("copy_from_user ret(0x%16x),len:%lx\n", ret, length);
+		pr_info("copy_from_user ret(0x%16x),len:%lx\n", ret, length);
 	} else {	/*K64+U64*/
-		LOGE(" K64+ U64 pc/lr/sp 0x%16lx/0x%16lx/0x%16lx\n",
+		pr_info(" K64+ U64 pc/lr/sp 0x%16lx/0x%16lx/0x%16lx\n",
 				(long)(user_ret->user_regs.pc),
 				(long)(user_ret->user_regs.regs[30]),
 				(long)(user_ret->user_regs.sp));
@@ -1781,11 +1799,11 @@ int DumpThreadNativeInfo(struct aee_oops *oops)
 				break;
 		}
 		if (userstack_end == 0) {
-			LOGE("Dump native stack failed:\n");
+			pr_info("Dump native stack failed:\n");
 			return 0;
 		}
 
-		LOGE("Dump stack range (0x%16lx:0x%16lx)\n", userstack_start, userstack_end);
+		pr_info("Dump stack range (0x%16lx:0x%16lx)\n", userstack_start, userstack_end);
 		length = ((userstack_end - userstack_start) <
 		     (MaxStackSize-1)) ? (userstack_end - userstack_start) : (MaxStackSize-1);
 		oops->userthread_stack.StackLength = length;
@@ -1804,7 +1822,9 @@ static void kernel_reportAPI(const AE_DEFECT_ATTR attr, const int db_opt, const 
 	struct aee_oops *oops;
 	int n = 0;
 
-	if (aee_mode == AEE_MODE_CUSTOMER_USER || (aee_mode == AEE_MODE_CUSTOMER_ENG && attr == AE_DEFECT_WARNING))
+	if ((aee_mode == AEE_MODE_CUSTOMER_USER ||
+			(aee_mode == AEE_MODE_CUSTOMER_ENG && attr == AE_DEFECT_WARNING))
+			&& (attr != AE_DEFECT_FATAL))
 		return;
 	oops = aee_oops_create(attr, AE_KERNEL_PROBLEM_REPORT, module);
 	if (NULL != oops) {

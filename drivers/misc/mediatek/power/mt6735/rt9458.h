@@ -77,7 +77,7 @@ enum rt9458_reg_addr {
 #define RT9458_MASK_OTG_POLAR (1 << RT9458_SHIFT_OTG_POLAR)
 #define RT9458_MASK_PWR_RDY  (1 << RT9458_SHIFT_PWR_RDY)
 #define RT9458_MASK_BOOST_MODE   (1 << RT9458_SHIFT_BOOST_MODE)
-#define RT9458_MASK_CHG_STAT  0x30 
+#define RT9458_MASK_CHG_STAT  0x30
 
 /* ========== CTRL2 0x01 ============ */
 #define RT9458_SHIFT_OPA_MODE   0
@@ -108,7 +108,7 @@ enum rt9458_reg_addr {
 
 /* ========== CTRL4 0x04 ============ */
 #define RT9458_SHIFT_RST  7
-#define RT9458_MASK_RST   (1 << RT9458_SHIFT_RST) 
+#define RT9458_MASK_RST   (1 << RT9458_SHIFT_RST)
 
 /* ========== CTRL5 0x05 ============ */
 #define RT9458_SHIFT_IEOC    0
@@ -147,7 +147,7 @@ enum rt9458_reg_addr {
 #define RT9458_SHIFT_MIVR  4
 
 #define RT9458_MASK_IPREC 0x03
-#define RT9458_MASK_MIVR  0x70 
+#define RT9458_MASK_MIVR  0x70
 
 /* ========== IRQSTATUS 0x15 ============ */
 #define RT9458_SHIFT_MIVR_STAT	0

@@ -97,11 +97,14 @@
 #include "extd_hdmi.h"
 #include "external_display.h"
 #endif
-
+#if defined(HDMI_MT8193_SUPPORT)
+#include "mt6735/external_display.h"
+#endif
 
 static dev_t mtk_disp_mgr_devno;
 static struct cdev *mtk_disp_mgr_cdev;
 static struct class *mtk_disp_mgr_class;
+
 
 DEFINE_MUTEX(session_config_mutex);
 disp_session_input_config _session_input[2][DISP_SESSION_MEMORY];
@@ -146,7 +149,7 @@ static int mtk_disp_mgr_mmap(struct file *file, struct vm_area_struct *vma)
 
 	vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
 
-	if (require_size > size || (pa_start < addr_min || pa_end > addr_max)) {
+	if (require_size > size || (pa_start < addr_min || pa_end > addr_max || pa_start > pa_end)) {
 		DISPERR("mmap size range over flow!!\n");
 		return -EAGAIN;
 	}
@@ -283,13 +286,20 @@ int disp_create_session(disp_session_config *config)
 
 	/* 2. Create this session */
 	if (idx != -1) {
-#ifdef CONFIG_SINGLE_PANEL_OUTPUT
+#if defined(HDMI_MT8193_SUPPORT) || defined(CONFIG_SINGLE_PANEL_OUTPUT)
 		if ((path_info.switching == DEV_MAX_NUM) && (DISP_SESSION_TYPE(session) == DISP_SESSION_EXTERNAL)
 			&& ext_disp_is_alive()) {
 				path_info.switching = DEV_MAX_NUM - 1;
 				pr_err("create external session, but path have not been destroyed ,need destroy first\n");
+#if defined(CONFIG_SINGLE_PANEL_OUTPUT)
 				external_display_path_change_without_cascade(DISP_SESSION_DIRECT_LINK_MODE,
 					0x0, DEV_MHL, 1);
+#endif
+#if defined(HDMI_MT8193_SUPPORT)
+				path_change_without_cascade(DISP_SESSION_DIRECT_LINK_MODE,
+					0x0, DEV_MHL);
+#endif
+
 		}
 #endif
 		config->session_id = session;
@@ -423,17 +433,6 @@ int _ioctl_create_session(unsigned long arg)
 		return -EFAULT;
 	}
 
-#ifdef CONFIG_MTK_GMO_RAM_OPTIMIZE
-	if (config.type == DISP_SESSION_MEMORY) {
-		if (init_ext_decouple_buffers() < 0) {
-			DISPERR("allocate dc buffer fail\n");
-			return -ENOMEM;
-		}
-
-		DISPMSG("allocate dc buffer success\n");
-	}
-#endif
-
 #if !defined(OVL_TIME_SHARING)
 	if ((config.type == DISP_SESSION_MEMORY) && (get_ovl1_to_mem_on() == false)) {
 		DISPMSG("[FB]: _ioctl_create_session! line:%d  %d\n", __LINE__,
@@ -478,13 +477,6 @@ int _ioctl_destroy_session(unsigned long arg)
 		DISPMSG("[FB]: copy_from_user failed! line:%d\n", __LINE__);
 		return -EFAULT;
 	}
-
-#ifdef CONFIG_MTK_GMO_RAM_OPTIMIZE
-	if (config.type == DISP_SESSION_MEMORY) {
-		deinit_ext_decouple_buffers();
-		DISPMSG("free dc buffer\n");
-	}
-#endif
 
 	if (disp_destroy_session(&config) != 0)
 		ret = -EFAULT;
@@ -1512,6 +1504,7 @@ static int set_primary_buffer(disp_session_input_config *input)
 	}
 #ifdef CONFIG_ALL_IN_TRIGGER_STAGE
 	captured_session_input[DISP_SESSION_PRIMARY - 1].session_id = input->session_id;
+	captured_session_input[DISP_SESSION_PRIMARY - 1].ccorr_config = input->ccorr_config;
 #endif
 	DISPPR_FENCE("%s\n", fence_msg_buf);
 	mutex_unlock(&session_config_mutex);

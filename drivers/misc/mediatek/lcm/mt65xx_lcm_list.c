@@ -34,10 +34,34 @@ LCM_DSI_MODE_CON lcm_dsi_mode;
 #endif
 
 LCM_DRIVER *lcm_driver_list[] = {
+#if defined(ST7701_DSI_VDO_FWVGA_GL)
+	&st7701_dsi_vdo_fwvga_gl_lcm_drv,
+#endif
+
+#if defined(ST7701_DSI_VDO_FWVGA_HL_MP)
+	&st7701_dsi_vdo_fwvga_hl_mp_lcm_drv,
+#endif
+
+#if defined(ST7701_DSI_VDO_FWVGA_HS4D5)
+	&st7701_dsi_vdo_fwvga_hs4d5_lcm_drv,
+#endif
+#if defined(ST7701_DSI_VDO_FWVGA_COE)
+	&st7701_dsi_vdo_fwvga_coe_lcm_drv,
+#endif
+
+#if defined(ST7701_DSI_VDO_FWVGA_IVO4D5)
+	&st7701_dsi_vdo_fwvga_ivo4d5_lcm_drv,
+#endif
 #if defined(NT35521_HD720_DSI_VDO_INNOLUX)
 	&nt35521_hd720_dsi_vdo_innolux_lcm_drv,
 #endif
 
+#if defined(NT35512_FWVGA_DSI_VDO_ZGD)
+	&nt35512_fwvga_dsi_vdo_zgd_lcm_drv,
+#endif
+#if defined(ILI9881C_HD_DSI_VDO_ILITEK_NT50358_3LANE)
+	&ili9881c_hd_dsi_vdo_ilitek_nt50358_3lane_lcm_drv,
+#endif
 #if defined(OTM1284A_HD720_DSI_VDO_TM)
 	&otm1284a_hd720_dsi_vdo_tm_lcm_drv,
 #endif
@@ -833,12 +857,20 @@ LCM_DRIVER *lcm_driver_list[] = {
 	&r63417_fhd_dsi_cmd_truly_nt50358_hdplus_lcm_drv,
 #endif
 
+#if defined(R63417_FHD_DSI_CMD_TRULY_NT50358_HD)
+	&r63417_fhd_dsi_cmd_truly_nt50358_hd_lcm_drv,
+#endif
+
 #if defined(R63417_FHD_DSI_CMD_TRULY_NT50358_720P)
 	&r63417_fhd_dsi_cmd_truly_nt50358_720p_lcm_drv,
 #endif
 
 #if defined(R63417_FHD_DSI_CMD_TRULY_NT50358_QHD)
 	&r63417_fhd_dsi_cmd_truly_nt50358_qhd_lcm_drv,
+#endif
+
+#if defined(R63417_FHD_DSI_CMD_TRULY_NT50358_FWVGA)
+	&r63417_fhd_dsi_cmd_truly_nt50358_fwvga_lcm_drv,
 #endif
 
 #if defined(R63417_FHD_DSI_VDO_TRULY_NT50358)
@@ -863,10 +895,6 @@ LCM_DRIVER *lcm_driver_list[] = {
 
 #if defined(R63419_FHD_TRULY_PHANTOM_2K_CMD_OK)
 	&r63419_fhd_truly_phantom_lcm_drv,
-#endif
-
-#if defined(R63419_FHDP_TRULY_PHANTOM_2K_CMD_OK)
-	&r63419_fhdp_truly_phantom_lcm_drv,
 #endif
 
 #if defined(R63419_FHD_TRULY_PHANTOM_2K_CMD_OK_MT6797)
@@ -1077,6 +1105,10 @@ unsigned char lcm_name_list[][128] = {
 	"r63417_fhd_dsi_cmd_truly_nt50358_qhd_drv",
 #endif
 
+#if defined(R63417_FHD_DSI_CMD_TRULY_NT50358_FWVGA)
+	"r63417_fhd_dsi_cmd_truly_nt50358_fwvga_drv",
+#endif
+
 #if defined(R63417_FHD_DSI_VDO_TRULY_NT50358)
 	"r63417_fhd_dsi_vdo_truly_nt50358_drv",
 #endif
@@ -1086,6 +1118,10 @@ unsigned char lcm_name_list[][128] = {
 #endif
 #if defined(R63417_FHD_DSI_CMD_TRULY_NT50358_HDPLUS)
 	"r63417_fhd_dsi_cmd_truly_nt50358_hdplus_drv",
+#endif
+
+#if defined(R63417_FHD_DSI_CMD_TRULY_NT50358_HD)
+	"r63417_fhd_dsi_cmd_truly_nt50358_hd_drv",
 #endif
 };
 

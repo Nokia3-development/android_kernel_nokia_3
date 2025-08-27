@@ -112,10 +112,6 @@ static void port_dump_raw_data(struct ccci_port *port, int dir, void *msg_buf, i
 	u64 ts_nsec;
 	unsigned long rem_nsec;
 
-	dump_size = len > DUMP_RAW_DATA_SIZE ? DUMP_RAW_DATA_SIZE : len;
-	_16_fix_num = dump_size / 16;
-	tail_num = dump_size % 16;
-
 	if (curr_p == NULL) {
 		CCCI_HISTORY_LOG(port->md_id, TAG, "start_addr <NULL>\n");
 		return;
@@ -124,6 +120,13 @@ static void port_dump_raw_data(struct ccci_port *port, int dir, void *msg_buf, i
 		CCCI_HISTORY_LOG(port->md_id, TAG, "len [0]\n");
 		return;
 	}
+	if (port->rx_ch == CCCI_FS_RX)
+		curr_p++; /* for print message-id in last 4bytes each line */
+
+	dump_size = len > DUMP_RAW_DATA_SIZE ? DUMP_RAW_DATA_SIZE : len;
+	_16_fix_num = dump_size / 16;
+	tail_num = dump_size % 16;
+
 	ts_nsec = local_clock();
 	rem_nsec = do_div(ts_nsec, 1000000000);
 
@@ -1083,6 +1086,19 @@ static void port_proxy_set_traffic_flag(struct port_proxy *proxy_p, unsigned int
 	}
 }
 
+
+/*Begin: add for choose multi modem, 20190104*/
+struct custom_modem{
+	int hwid;
+	int type;
+	int num;
+};
+
+extern unsigned short fih_hwid;
+extern struct custom_modem fih_modem[];
+extern size_t get_fih_modem_size(void);
+/*End: add for choose multi modem, 20190104*/
+
 long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd, unsigned long arg)
 {
 	long state_for_user, ret = 0;
@@ -1104,7 +1120,6 @@ long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd,
 	unsigned int val;
 	char magic_pattern[64];
 #endif
-
 	int i = 0, j = 0, modem_type = 0;
 
 	switch (cmd) {
@@ -1145,6 +1160,7 @@ long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd,
 	case CCCI_IOC_MD_RESET:
 		CCCI_NORMAL_LOG(md_id, CHAR, "MD reset ioctl called by (%d)%s\n", ch, current->comm);
 		ccci_event_log("md%d: MD reset ioctl called by (%d)%s\n", md_id, ch, current->comm);
+		clear_meta_1st_boot_arg(md_id);
 		inject_md_status_event(md_id, MD_STA_EV_RESET_REQUEST, current->comm);
 		ret = port_proxy_send_msg_to_user(proxy_p, CCCI_MONITOR_CH, CCCI_MD_MSG_RESET_REQUEST, 0);
 #ifdef CONFIG_MTK_ECCCI_C2K
@@ -1342,11 +1358,15 @@ long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd,
 		} else {
 			CCCI_NORMAL_LOG(md_id, CHAR, "IOC_RELOAD_MD_TYPE: storing md type(0x%x)!\n", md_type);
 			ccci_event_log("md%d: IOC_RELOAD_MD_TYPE: storing md type(0x%x)!\n", md_id, md_type);
-			ccci_md_set_reload_type(proxy_p->md_obj, md_type);
+			if (check_md_type(md_type) > 0)
+				ccci_md_set_reload_type(proxy_p->md_obj, md_type);
+			else
+				CCCI_NORMAL_LOG(md_id, CHAR, "invalid MD TYPE: 0x%x\n", md_type);
+
 		}
 		break;
 	case CCCI_IOC_SET_MD_IMG_EXIST:
-		/*Begin:modify for multi modem*/
+		/*Begin: add for choose multi modem, 20190104*/
 		#if 0
 		if (copy_from_user
 		    (&proxy_p->md_img_exist, (void __user *)arg, sizeof(proxy_p->md_img_exist))) {
@@ -1357,6 +1377,15 @@ long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd,
 		#endif
 
 		modem_type = 0x000060;
+		for(i = 0; i < get_fih_modem_size()/sizeof(struct custom_modem); i++)
+		{
+			if(fih_hwid == fih_modem[i].hwid)
+			{
+				modem_type = fih_modem[i].type;
+				break;
+			}
+		}
+
 		j = 0;
 
 		for(i = 1; i < modem_ulfctg; i++)
@@ -1374,7 +1403,8 @@ long port_proxy_user_ioctl(struct port_proxy *proxy_p, int ch, unsigned int cmd,
 			proxy_p->md_img_exist[0] = 5;
 			proxy_p->md_img_exist[1] = 6;
 		}
-		/*End:modify for multi modem*/
+		/*End: add for choose multi modem, 20190104*/
+
 		proxy_p->md_img_type_is_set = 1;
 		CCCI_BOOTUP_LOG(md_id, CHAR,
 			"CCCI_IOC_SET_MD_IMG_EXIST: set done!\n");
